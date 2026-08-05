@@ -1,0 +1,49 @@
+# Operating-system metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Editor and IDE local state
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary and cache files
+.cache/
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Logs and transient reports
+logs/
+*.log
+coverage/
+reports/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Certificates, private keys, and common secret material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.cer
+credentials*.json
+secrets*.json
+
+# Local evidence artifacts not intentionally committed
+.evidence/
+evidence-local/
+artifacts-local/
+screenshots-local/
