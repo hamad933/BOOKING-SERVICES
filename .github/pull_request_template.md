@@ -14,11 +14,11 @@
 
 ## In Scope
 
-- 
+- <!-- Add each authorized item. -->
 
 ## Out of Scope
 
-- 
+- <!-- Add each excluded item. -->
 
 ## Prohibited changes checked
 
