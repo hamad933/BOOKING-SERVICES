@@ -1,0 +1,148 @@
+name: Governance Baseline
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: Validate repository governance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify required governance files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_files=(
+            ".gitignore"
+            "README.md"
+            "AGENTS.md"
+            "CONTRIBUTING.md"
+            ".github/pull_request_template.md"
+            ".github/workflows/governance.yml"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Missing required governance file: $file" >&2
+              exit 1
+            fi
+
+            if [[ ! -s "$file" ]]; then
+              echo "Required governance file is empty: $file" >&2
+              exit 1
+            fi
+          done
+
+      - name: Verify governing contract terms
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          require_term() {
+            local file="$1"
+            local term="$2"
+
+            if ! grep -Fq "$term" "$file"; then
+              echo "Missing required term '$term' in $file" >&2
+              exit 1
+            fi
+          }
+
+          require_term AGENTS.md "Bounded Workstream Contract"
+          require_term AGENTS.md "Google Drive governed RP03 state"
+          require_term AGENTS.md "RP03 static control pack"
+          require_term AGENTS.md "Conversation memory"
+          require_term AGENTS.md "PROJECT_ID"
+          require_term AGENTS.md "WORKSTREAM_ID"
+          require_term AGENTS.md "Execution Handoff"
+          require_term AGENTS.md "RP03 Central Controller"
+
+          require_term CONTRIBUTING.md "Workstream Contract"
+          require_term CONTRIBUTING.md "main"
+          require_term CONTRIBUTING.md "pull request"
+          require_term CONTRIBUTING.md "Authorized Paths"
+          require_term CONTRIBUTING.md "Execution Handoff"
+          require_term CONTRIBUTING.md "Central Controller"
+          require_term CONTRIBUTING.md "Google Drive"
+
+      - name: Verify README guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -Fq "RP03 — Booking & Services" README.md
+          grep -Fq "Product implementation status: NOT STARTED." README.md
+          grep -Fq "No framework, database, API, UI, deployment approach, application stack, or architecture has been approved." README.md
+          grep -Fq "product readiness" README.md
+          grep -Fq "release readiness" README.md
+
+          if grep -Eiq 'Product implementation status:[[:space:]]*(READY|COMPLETE|IMPLEMENTED)' README.md; then
+            echo "README claims product implementation readiness." >&2
+            exit 1
+          fi
+
+          if grep -Eiq '(approved|selected)[[:space:]]+(application[[:space:]]+)?(stack|framework|database|API|UI|deployment|architecture)' README.md; then
+            echo "README appears to claim an approved stack or architecture." >&2
+            exit 1
+          fi
+
+      - name: Verify diff hygiene and bootstrap path boundary
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${BASE_SHA:-}" ]]; then
+            git diff --check "$BASE_SHA"...HEAD
+          else
+            echo "No pull-request base SHA is available; diff whitespace check skipped."
+          fi
+
+          if [[ "${HEAD_BRANCH:-}" == "chore/rp03-governance-bootstrap" ]]; then
+            authorized_paths=(
+              ".gitignore"
+              "README.md"
+              "AGENTS.md"
+              "CONTRIBUTING.md"
+              ".github/pull_request_template.md"
+              ".github/workflows/governance.yml"
+            )
+
+            mapfile -t changed_paths < <(git diff --name-only "$BASE_SHA"...HEAD)
+
+            for path in "${changed_paths[@]}"; do
+              authorized=false
+
+              for allowed in "${authorized_paths[@]}"; do
+                if [[ "$path" == "$allowed" ]]; then
+                  authorized=true
+                  break
+                fi
+              done
+
+              if [[ "$authorized" != true ]]; then
+                echo "Unauthorized bootstrap path: $path" >&2
+                exit 1
+              fi
+            done
+          fi
+
+      - name: Confirm stack-independent validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Governance validation completed without package installation, framework tooling, or product dependencies."
