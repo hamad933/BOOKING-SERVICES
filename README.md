@@ -10,9 +10,11 @@ The RP03 static control pack governs stable product and domain invariants. It is
 
 ## Current implementation status
 
-**Product implementation status: NOT STARTED.**
+**Product implementation status: IN PROGRESS.**
 
-No framework, database, API, UI, deployment approach, application stack, or architecture has been approved. No product implementation is authorized by the presence of this repository baseline.
+Real RP03 UI implementation is present in the repository under bounded, Controller-reviewed workstreams. Implementation progress must not be interpreted as product completion, product readiness, release readiness, deployment readiness, or approval of a framework, backend, database, production API, deployment approach, broad application stack, or production architecture.
+
+This repository status does not by itself authorize additional product work; each change still requires a bounded Workstream Contract.
 
 ## Execution governance
 
