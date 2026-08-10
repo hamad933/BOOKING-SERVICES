@@ -113,18 +113,37 @@ jobs:
           set -euo pipefail
 
           grep -Fq "RP03 — Booking & Services" README.md
-          grep -Fq "Product implementation status: NOT STARTED." README.md
-          grep -Fq "No framework, database, API, UI, deployment approach, application stack, or architecture has been approved." README.md
+          grep -Fq "Product implementation status: IN PROGRESS." README.md
+          grep -Fq "Real RP03 UI implementation is present in the repository" README.md
+          grep -Fq "product completion" README.md
           grep -Fq "product readiness" README.md
           grep -Fq "release readiness" README.md
+          grep -Fq "deployment readiness" README.md
+          grep -Fq "framework" README.md
+          grep -Fq "backend" README.md
+          grep -Fq "database" README.md
+          grep -Fq "production API" README.md
+          grep -Fq "deployment approach" README.md
+          grep -Fq "broad application stack" README.md
+          grep -Fq "production architecture" README.md
+
+          if grep -Fq "Product implementation status: NOT STARTED." README.md; then
+            echo "README contains the stale NOT STARTED implementation status." >&2
+            exit 1
+          fi
+
+          if grep -Fq "No framework, database, API, UI, deployment approach, application stack, or architecture has been approved." README.md; then
+            echo "README contains the stale no-UI-approved assertion." >&2
+            exit 1
+          fi
 
           if grep -Eiq 'Product implementation status:[[:space:]]*(READY|COMPLETE|IMPLEMENTED)' README.md; then
             echo "README claims product implementation readiness." >&2
             exit 1
           fi
 
-          if grep -Eiq '(approved|selected)[[:space:]]+(application[[:space:]]+)?(stack|framework|database|API|UI|deployment|architecture)' README.md; then
-            echo "README appears to claim an approved stack or architecture." >&2
+          if grep -Eiq '(approved|selected)[[:space:]]+(application[[:space:]]+)?(stack|framework|backend|database|production[[:space:]]+API|deployment|architecture)' README.md; then
+            echo "README appears to claim an approved stack, backend, deployment approach, or architecture." >&2
             exit 1
           fi
 
@@ -167,6 +186,28 @@ jobs:
 
               if [[ "$authorized" != true ]]; then
                 echo "Unauthorized bootstrap path: $path" >&2
+                exit 1
+              fi
+            done
+          fi
+
+          if [[ "${HEAD_BRANCH:-}" == "chore/rp03-governance-status-remediation" ]]; then
+            authorized_paths=(
+              ".github/workflows/governance.yml"
+              "README.md"
+            )
+
+            mapfile -t changed_paths < <(git diff --name-only "$BASE_SHA"...HEAD | sort)
+
+            if [[ "${#changed_paths[@]}" -ne "${#authorized_paths[@]}" ]]; then
+              echo "Governance remediation must change exactly the two authorized paths." >&2
+              printf 'Changed path: %s\n' "${changed_paths[@]}" >&2
+              exit 1
+            fi
+
+            for i in "${!authorized_paths[@]}"; do
+              if [[ "${changed_paths[$i]}" != "${authorized_paths[$i]}" ]]; then
+                echo "Unauthorized or missing governance-remediation path: ${changed_paths[$i]}" >&2
                 exit 1
               fi
             done
