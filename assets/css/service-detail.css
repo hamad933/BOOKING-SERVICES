@@ -53,10 +53,12 @@
   gap: 44px;
   align-items: start;
   padding-block-end: 68px;
+  direction: ltr;
 }
 
 .detail-main {
   min-width: 0;
+  direction: rtl;
 }
 
 .detail-hero {
@@ -421,6 +423,7 @@
 
 .detail-aside {
   position: sticky;
+  direction: rtl;
   top: 22px;
   display: grid;
   gap: 18px;
