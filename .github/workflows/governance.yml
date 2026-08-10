@@ -115,6 +115,8 @@ jobs:
           grep -Fq "RP03 — Booking & Services" README.md
           grep -Fq "Product implementation status: IN PROGRESS." README.md
           grep -Fq "Real RP03 UI implementation is present in the repository" README.md
+          grep -Fq "Implementation progress must not be interpreted as product completion, product readiness, release readiness, deployment readiness" README.md
+          grep -Fq "or approval of a framework, backend, database, production API, deployment approach, broad application stack, or production architecture." README.md
           grep -Fq "product completion" README.md
           grep -Fq "product readiness" README.md
           grep -Fq "release readiness" README.md
