@@ -140,6 +140,12 @@
     String(date.getUTCDate()).padStart(2, "0")
   ].join("-");
 
+  const validDateKey = (value) => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = dateFromKey(value);
+    return Number.isFinite(parsed.getTime()) && keyFromDate(parsed) === value;
+  };
+
   const moveDateKey = (key, days) => {
     const date = dateFromKey(key);
     return keyFromDate(new Date(date.getTime() + (days * DAY_MS)));
@@ -176,19 +182,27 @@
   const restoreState = () => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
-      if (!saved || typeof saved !== "object") return;
+      if (!saved || typeof saved !== "object" || Array.isArray(saved)) return;
 
-      if (typeof saved.selectedDateKey === "string") {
+      if (validDateKey(saved.selectedDateKey)) {
         state.selectedDateKey = saved.selectedDateKey;
       }
-      if (typeof saved.selectedSessionId === "string") {
+      if (typeof saved.selectedSessionId === "string" && baseSessions.some((item) => item.id === saved.selectedSessionId)) {
         state.selectedSessionId = saved.selectedSessionId;
       }
-      if (saved.preparationOverrides && typeof saved.preparationOverrides === "object") {
-        state.preparationOverrides = saved.preparationOverrides;
+      if (saved.preparationOverrides && typeof saved.preparationOverrides === "object" && !Array.isArray(saved.preparationOverrides)) {
+        state.preparationOverrides = Object.fromEntries(Object.entries(saved.preparationOverrides).flatMap(([key, value]) => {
+          const [dateKey, sessionId] = key.split("|");
+          if (!validDateKey(dateKey) || !baseSessions.some((item) => item.id === sessionId) || !Array.isArray(value)) return [];
+          return [[key, value.map(Boolean).slice(0, preparationLabels.length)]];
+        }));
       }
       if (Array.isArray(saved.openedSessions)) {
-        state.openedSessions = new Set(saved.openedSessions.filter((item) => typeof item === "string"));
+        state.openedSessions = new Set(saved.openedSessions.filter((item) => {
+          if (typeof item !== "string") return false;
+          const [dateKey, sessionId] = item.split("|");
+          return validDateKey(dateKey) && baseSessions.some((sessionItem) => sessionItem.id === sessionId);
+        }));
       }
     } catch {
       // The schedule remains deterministic without browser storage.

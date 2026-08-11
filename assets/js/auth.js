@@ -26,20 +26,42 @@
     FRONT_DESK: "/operations/bookings/"
   });
 
+  const ROUTE_PATHS = new Set([
+    "/",
+    "/services/",
+    "/services/technical-review/",
+    "/guided-choice/",
+    "/book/technical-review/",
+    "/login/",
+    "/unauthorized/",
+    "/provider/schedule/",
+    "/resources/schedule/",
+    "/operations/bookings/",
+    "/operations/attendance/",
+    "/admin/services/",
+    "/admin/providers-resources/",
+    "/admin/availability-exceptions/"
+  ]);
+
   const isKnownRole = (role) => Object.values(ROLES).includes(role);
 
-  const safeReturnPath = (value) => {
+  const parseInternalPath = (value) => {
     if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
       return null;
     }
 
     try {
       const parsed = new URL(value, window.location.origin);
-      if (parsed.origin !== window.location.origin) return null;
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      if (parsed.origin !== window.location.origin || !ROUTE_PATHS.has(parsed.pathname)) return null;
+      return parsed;
     } catch {
       return null;
     }
+  };
+
+  const safeReturnPath = (value) => {
+    const parsed = parseInternalPath(value);
+    return parsed ? `${parsed.pathname}${parsed.search}${parsed.hash}` : null;
   };
 
   const readSession = () => {
@@ -89,22 +111,23 @@
   const defaultDestination = (role = currentRole()) => ROLE_DESTINATIONS[role] || "/";
 
   const requiredRolesForPath = (path) => {
-    if (path === "/provider/schedule/" || path.startsWith("/provider/schedule/?")) {
+    const parsed = parseInternalPath(path);
+    const pathname = parsed?.pathname;
+    if (!pathname) return null;
+
+    if (pathname === "/provider/schedule/") {
       return [ROLES.CONSULTANT];
     }
-    if (
-      path === "/operations/bookings/" || path.startsWith("/operations/bookings/?") ||
-      path === "/operations/attendance/" || path.startsWith("/operations/attendance/?")
-    ) {
+    if (pathname === "/operations/bookings/" || pathname === "/operations/attendance/") {
       return [ROLES.FRONT_DESK];
     }
-    if (path === "/resources/schedule/" || path.startsWith("/resources/schedule/?")) {
+    if (pathname === "/resources/schedule/") {
       return [ROLES.CONSULTANT, ROLES.ADMIN];
     }
     if (
-      path === "/admin/services/" || path.startsWith("/admin/services/?") ||
-      path === "/admin/providers-resources/" || path.startsWith("/admin/providers-resources/?") ||
-      path === "/admin/availability-exceptions/" || path.startsWith("/admin/availability-exceptions/?")
+      pathname === "/admin/services/" ||
+      pathname === "/admin/providers-resources/" ||
+      pathname === "/admin/availability-exceptions/"
     ) {
       return [ROLES.ADMIN];
     }
@@ -213,7 +236,10 @@
       sessionPanel.hidden = false;
       sessionPanel.querySelector("[data-current-role]").textContent = roleLabel(activeSession.role);
       const continueLink = sessionPanel.querySelector("[data-session-continue]");
-      continueLink.href = defaultDestination(activeSession.role);
+      const required = returnPath ? requiredRolesForPath(returnPath) : null;
+      continueLink.href = returnPath && (!required || required.includes(activeSession.role))
+        ? returnPath
+        : defaultDestination(activeSession.role);
     }
 
     form?.addEventListener("submit", (event) => {

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RP03 logout probe</title></head>
+<body data-result="PENDING">
+<script>
+(() => {
+  "use strict";
+  const finish = (result) => {
+    document.body.dataset.result = result.pass ? "PASS" : "FAIL";
+    const pre = document.createElement("pre");
+    pre.id = "qa-result";
+    pre.textContent = JSON.stringify(result);
+    document.body.replaceChildren(pre);
+  };
+
+  sessionStorage.clear();
+  sessionStorage.setItem("rp03.auth.session.v1", JSON.stringify({
+    role: "ADMIN",
+    displayName: "مسؤول اختبار الخروج",
+    source: "logout-harness",
+    createdAt: new Date().toISOString()
+  }));
+
+  const frame = document.createElement("iframe");
+  frame.src = "/admin/services/";
+  frame.style.cssText = "width:100%;height:900px;border:0";
+  document.body.append(frame);
+
+  let clicked = false;
+  frame.addEventListener("load", () => setTimeout(() => {
+    try {
+      const path = frame.contentWindow.location.pathname;
+      if (!clicked && path === "/admin/services/") {
+        const control = frame.contentDocument.querySelector("[data-auth-logout]");
+        if (!control) {
+          finish({pass:false,reason:"missing logout control",path});
+          return;
+        }
+        clicked = true;
+        control.click();
+        return;
+      }
+      if (clicked) {
+        const session = sessionStorage.getItem("rp03.auth.session.v1");
+        finish({pass:path === "/login/" && session === null,path,sessionCleared:session === null});
+      }
+    } catch (error) {
+      finish({pass:false,error:String(error)});
+    }
+  }, 700));
+})();
+</script>
+</body>
+</html>

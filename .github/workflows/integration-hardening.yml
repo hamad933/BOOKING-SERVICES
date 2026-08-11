@@ -1,0 +1,465 @@
+name: RP03 Integration Hardening
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hardening:
+    name: Validate RP03 integration and visual evidence
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'chore/rp03-integration-hardening'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' js_files < <(find . -type f -name '*.js' -not -path './.git/*' -print0 | sort -z)
+          if [[ ${#js_files[@]} -eq 0 ]]; then
+            echo "No JavaScript files found." >&2
+            exit 1
+          fi
+          for file in "${js_files[@]}"; do
+            node --check "$file"
+            echo "PASS $file"
+          done
+
+      - name: Audit real routes and internal links
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urljoin, urlsplit
+          import re
+          import sys
+
+          routes = {
+              "/": Path("index.html"),
+              "/services/": Path("services/index.html"),
+              "/services/technical-review/": Path("services/technical-review/index.html"),
+              "/guided-choice/": Path("guided-choice/index.html"),
+              "/book/technical-review/": Path("book/technical-review/index.html"),
+              "/login/": Path("login/index.html"),
+              "/unauthorized/": Path("unauthorized/index.html"),
+              "/provider/schedule/": Path("provider/schedule/index.html"),
+              "/resources/schedule/": Path("resources/schedule/index.html"),
+              "/operations/bookings/": Path("operations/bookings/index.html"),
+              "/operations/attendance/": Path("operations/attendance/index.html"),
+              "/admin/services/": Path("admin/services/index.html"),
+              "/admin/providers-resources/": Path("admin/providers-resources/index.html"),
+              "/admin/availability-exceptions/": Path("admin/availability-exceptions/index.html"),
+          }
+
+          protected = {
+              "/provider/schedule/": "CONSULTANT",
+              "/resources/schedule/": "CONSULTANT ADMIN",
+              "/operations/bookings/": "FRONT_DESK",
+              "/operations/attendance/": "FRONT_DESK",
+              "/admin/services/": "ADMIN",
+              "/admin/providers-resources/": "ADMIN",
+              "/admin/availability-exceptions/": "ADMIN",
+          }
+
+          missing = [f"{route} -> {path}" for route, path in routes.items() if not path.is_file()]
+          if missing:
+              print("Missing real routes:\n" + "\n".join(missing), file=sys.stderr)
+              raise SystemExit(1)
+
+          class Parser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.targets = []
+                  self.ids = set()
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if "id" in attrs:
+                      self.ids.add(attrs["id"])
+                  if tag == "a" and attrs.get("href"):
+                      self.targets.append(("href", attrs["href"]))
+                  if tag == "form" and attrs.get("action"):
+                      self.targets.append(("action", attrs["action"]))
+
+          parsed = {}
+          for route, path in routes.items():
+              parser = Parser()
+              parser.feed(path.read_text(encoding="utf-8"))
+              parsed[route] = parser
+
+          failures = []
+          for route, parser in parsed.items():
+              for kind, raw in parser.targets:
+                  if raw.startswith(("http://", "https://", "mailto:", "tel:", "javascript:")):
+                      continue
+                  resolved = urlsplit(urljoin(route, raw))
+                  if resolved.path not in routes:
+                      failures.append(f"{route}: {kind} {raw!r} resolves to missing route {resolved.path!r}")
+                      continue
+                  if resolved.fragment and resolved.fragment not in parsed[resolved.path].ids:
+                      failures.append(f"{route}: {kind} {raw!r} targets missing fragment #{resolved.fragment} on {resolved.path}")
+
+          for route, expected_guard in protected.items():
+              html = routes[route].read_text(encoding="utf-8")
+              body_match = re.search(r"<body\b([^>]*)>", html, flags=re.I | re.S)
+              attrs = body_match.group(1) if body_match else ""
+              if 'data-auth-pending="true"' not in attrs:
+                  failures.append(f"{route}: protected body is missing data-auth-pending=\"true\"")
+              guard = re.search(r'data-auth-guard="([^"]+)"', attrs)
+              if not guard:
+                  failures.append(f"{route}: protected body is missing data-auth-guard")
+              elif set(guard.group(1).split()) != set(expected_guard.split()):
+                  failures.append(f"{route}: guard {guard.group(1)!r} does not match {expected_guard!r}")
+
+          js_location_re = re.compile(r"(?:window\.)?location\.(?:assign|replace)\(\s*(['\"])(/[^'\"]+)\1\s*\)|(?:window\.)?location\.href\s*=\s*(['\"])(/[^'\"]+)\3")
+          for path in Path("assets/js").glob("*.js"):
+              text = path.read_text(encoding="utf-8")
+              for match in js_location_re.finditer(text):
+                  raw = match.group(2) or match.group(4)
+                  target = urlsplit(raw).path
+                  if target not in routes:
+                      failures.append(f"{path}: literal navigation target {raw!r} is not a real route")
+
+          services_html = routes["/services/"].read_text(encoding="utf-8")
+          forbidden_deferred = [
+              "/services/problem-diagnosis/",
+              "/services/planning-execution/",
+              "/services/decision-options/",
+              "/services/implementation-review/",
+              "/services/needs-discovery/",
+          ]
+          for path in forbidden_deferred:
+              if f'href="{path}"' in services_html or f"href='{path}'" in services_html:
+                  failures.append(f"/services/: stale deferred href remains: {path}")
+
+          if failures:
+              print("ROUTE/LINK AUDIT FAIL", file=sys.stderr)
+              for failure in failures:
+                  print(f"- {failure}", file=sys.stderr)
+              raise SystemExit(1)
+
+          print("ROUTES PASS")
+          print("INTERNAL LINKS PASS")
+          print("PROTECTED GUARD DECLARATIONS PASS")
+          print("DEFERRED DETAIL TARGETS PASS")
+          PY
+
+      - name: Browser integration, security, responsive, and evidence pass
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$CHROME" ]]; then
+            echo "A Chromium-compatible browser is required for RP03 hardening evidence." >&2
+            exit 1
+          fi
+
+          EVIDENCE="$RUNNER_TEMP/rp03-integration-hardening-evidence"
+          mkdir -p "$EVIDENCE/screenshots" "$EVIDENCE/logs"
+          : > "$EVIDENCE/logs/browser-console.log"
+          : > "$EVIDENCE/responsive-results.txt"
+          : > "$EVIDENCE/security-results.txt"
+          : > "$EVIDENCE/auth-results.txt"
+          : > "$EVIDENCE/storage-results.txt"
+
+          python3 -m http.server 8765 --bind 127.0.0.1 >"$EVIDENCE/logs/http-server.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 1
+          BASE="http://127.0.0.1:8765"
+
+          encode() {
+            python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+          }
+
+          chrome_dump() {
+            local url="$1" width="$2" out="$3"
+            local profile
+            profile="$(mktemp -d)"
+            timeout 45 "$CHROME" \
+              --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+              --force-device-scale-factor=1 --window-size="${width},900" --virtual-time-budget=4000 \
+              --user-data-dir="$profile" --dump-dom "$url" \
+              >"$out" 2>>"$EVIDENCE/logs/browser-console.log"
+            rm -rf "$profile"
+          }
+
+          harness_url() {
+            local mode="$1" role="$2" target="$3"
+            local url="$BASE/.github/qa/rp03-browser-harness.html?mode=$(encode "$mode")&target=$(encode "$target")"
+            if [[ -n "$role" ]]; then
+              url+="&role=$(encode "$role")"
+            fi
+            printf '%s' "$url"
+          }
+
+          probe() {
+            local label="$1" target="$2" role="$3" width="$4"
+            local dump="$RUNNER_TEMP/rp03-probe-${label}-${width}.html"
+            chrome_dump "$(harness_url probe "$role" "$target")" "$width" "$dump"
+            if ! grep -Fq 'data-result="PASS"' "$dump"; then
+              echo "RESPONSIVE FAIL $label $target ${width}px" >&2
+              cat "$dump" >&2
+              exit 1
+            fi
+            if ! grep -Fq "\"path\":\"$target\"" "$dump"; then
+              echo "ROUTE RUNTIME FAIL $label expected $target" >&2
+              cat "$dump" >&2
+              exit 1
+            fi
+            echo "PASS $label $target ${width}px" >> "$EVIDENCE/responsive-results.txt"
+          }
+
+          path_probe() {
+            local label="$1" target="$2" role="$3" expected_prefix="$4"
+            local dump="$RUNNER_TEMP/rp03-auth-${label}.html"
+            chrome_dump "$(harness_url probe "$role" "$target")" 1440 "$dump"
+            if ! grep -Fq 'data-result="PASS"' "$dump" || ! grep -Fq "\"path\":\"$expected_prefix" "$dump"; then
+              echo "AUTH PATH FAIL $label target=$target role=$role expected=$expected_prefix" >&2
+              cat "$dump" >&2
+              exit 1
+            fi
+            echo "PASS $label target=$target role=${role:-GUEST} expected=$expected_prefix" >> "$EVIDENCE/auth-results.txt"
+          }
+
+          auth_value_probe() {
+            local label="$1" candidate="$2" expected="$3"
+            local dump="$RUNNER_TEMP/rp03-safe-return-${label}.html"
+            local url="$BASE/.github/qa/rp03-browser-harness.html?mode=auth&candidate=$(encode "$candidate")&expected=$(encode "$expected")"
+            chrome_dump "$url" 1440 "$dump"
+            if ! grep -Fq 'data-result="PASS"' "$dump"; then
+              echo "SAFE RETURN FAIL $label candidate=$candidate" >&2
+              cat "$dump" >&2
+              exit 1
+            fi
+            echo "PASS $label candidate=$candidate expected=$expected" >> "$EVIDENCE/auth-results.txt"
+          }
+
+          xss_probe() {
+            local surface="$1" dump="$RUNNER_TEMP/rp03-xss-${surface}.html"
+            chrome_dump "$BASE/.github/qa/rp03-browser-harness.html?mode=xss&surface=$(encode "$surface")" 1440 "$dump"
+            if ! grep -Fq 'data-result="PASS"' "$dump"; then
+              echo "DOM INPUT SAFETY FAIL $surface" >&2
+              cat "$dump" >&2
+              exit 1
+            fi
+            echo "PASS hostile DOM value $surface" >> "$EVIDENCE/security-results.txt"
+          }
+
+          corruption_probe() {
+            local surface="$1" dump="$RUNNER_TEMP/rp03-corruption-${surface}.html"
+            chrome_dump "$BASE/.github/qa/rp03-corruption-harness.html?surface=$(encode "$surface")" 1440 "$dump"
+            if ! grep -Fq 'data-result="PASS"' "$dump"; then
+              echo "STORAGE CORRUPTION FAIL $surface" >&2
+              cat "$dump" >&2
+              exit 1
+            fi
+            echo "PASS malformed storage $surface" >> "$EVIDENCE/storage-results.txt"
+          }
+
+          routes=(
+            'S01|/|'
+            'S02|/services/|'
+            'S03|/services/technical-review/|'
+            'S04|/guided-choice/|'
+            'S05|/book/technical-review/|'
+            'S06|/provider/schedule/|CONSULTANT'
+            'S07|/resources/schedule/|CONSULTANT'
+            'S08|/operations/bookings/|FRONT_DESK'
+            'S09|/operations/attendance/|FRONT_DESK'
+            'S10|/admin/services/|ADMIN'
+            'S11|/admin/providers-resources/|ADMIN'
+            'S12|/admin/availability-exceptions/|ADMIN'
+            'login|/login/|'
+            'unauthorized|/unauthorized/|'
+          )
+
+          for width in 1440 1024 768 390; do
+            for entry in "${routes[@]}"; do
+              IFS='|' read -r label target role <<< "$entry"
+              probe "$label" "$target" "$role" "$width"
+            done
+          done
+
+          path_probe consultant-allowed /provider/schedule/ CONSULTANT /provider/schedule/
+          path_probe resource-consultant-allowed /resources/schedule/ CONSULTANT /resources/schedule/
+          path_probe resource-admin-allowed /resources/schedule/ ADMIN /resources/schedule/
+          path_probe frontdesk-bookings-allowed /operations/bookings/ FRONT_DESK /operations/bookings/
+          path_probe frontdesk-attendance-allowed /operations/attendance/ FRONT_DESK /operations/attendance/
+          path_probe admin-services-allowed /admin/services/ ADMIN /admin/services/
+          path_probe admin-providers-allowed /admin/providers-resources/ ADMIN /admin/providers-resources/
+          path_probe admin-availability-allowed /admin/availability-exceptions/ ADMIN /admin/availability-exceptions/
+
+          for protected_target in \
+            /provider/schedule/ /resources/schedule/ /operations/bookings/ /operations/attendance/ \
+            /admin/services/ /admin/providers-resources/ /admin/availability-exceptions/; do
+            path_probe "guest-$(echo "$protected_target" | tr '/' '-')" "$protected_target" '' /login/
+            path_probe "wrong-role-$(echo "$protected_target" | tr '/' '-')" "$protected_target" AUTHENTICATED_CUSTOMER /unauthorized/
+          done
+
+          auth_value_probe external-url 'https://example.com/escape' __null__
+          auth_value_probe protocol-relative '//example.com/escape' __null__
+          auth_value_probe unknown-internal '/does-not-exist/' __null__
+          auth_value_probe known-public '/services/?q=review#top' '/services/?q=review#top'
+          auth_value_probe known-protected '/resources/schedule/?day=1#grid' '/resources/schedule/?day=1#grid'
+
+          for surface in s05-s08 s09 s10 s11-provider s11-resource s12-rule s12-exception; do
+            xss_probe "$surface"
+          done
+
+          for surface in auth s05 s06 s07 frontdesk admin; do
+            corruption_probe "$surface"
+          done
+
+          capture() {
+            local label="$1" target="$2" role="$3"
+            local profile url out
+            profile="$(mktemp -d)"
+            url="$(harness_url redirect "$role" "$target")"
+            out="$EVIDENCE/screenshots/${label}.png"
+            timeout 45 "$CHROME" \
+              --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+              --force-device-scale-factor=1 --window-size=1440,1600 --virtual-time-budget=4500 \
+              --user-data-dir="$profile" --screenshot="$out" "$url" \
+              >/dev/null 2>>"$EVIDENCE/logs/browser-console.log"
+            rm -rf "$profile"
+            test -s "$out"
+          }
+
+          for entry in "${routes[@]}"; do
+            IFS='|' read -r label target role <<< "$entry"
+            capture "$label" "$target" "$role"
+          done
+
+          python3 - "$EVIDENCE" <<'PY'
+          from pathlib import Path
+          import html
+          import sys
+          evidence = Path(sys.argv[1])
+          labels = [
+              ("S01", "/"), ("S02", "/services/"), ("S03", "/services/technical-review/"),
+              ("S04", "/guided-choice/"), ("S05", "/book/technical-review/"), ("S06", "/provider/schedule/"),
+              ("S07", "/resources/schedule/"), ("S08", "/operations/bookings/"), ("S09", "/operations/attendance/"),
+              ("S10", "/admin/services/"), ("S11", "/admin/providers-resources/"), ("S12", "/admin/availability-exceptions/"),
+              ("login", "/login/"), ("unauthorized", "/unauthorized/")
+          ]
+          cards = []
+          for label, route in labels:
+              cards.append(f'<figure><figcaption><strong>{html.escape(label)}</strong> <span>{html.escape(route)}</span></figcaption><img src="screenshots/{label}.png" alt="{html.escape(label)}"></figure>')
+          (evidence / "contact-sheet.html").write_text("""<!doctype html><meta charset=utf-8><style>
+          *{box-sizing:border-box}body{margin:14px;background:#eef1f5;color:#142c49;font:13px Arial,sans-serif}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}figure{margin:0;padding:7px;background:white;border:1px solid #ccd6e3;border-radius:8px;overflow:hidden}figcaption{height:28px;display:flex;align-items:center;justify-content:space-between;gap:6px}figcaption span{font-size:10px;color:#66768b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}img{display:block;width:100%;height:auto;border:1px solid #e1e6ed}
+          </style><div class=grid>""" + "".join(cards) + "</div>", encoding="utf-8")
+          PY
+
+          profile="$(mktemp -d)"
+          timeout 45 "$CHROME" \
+            --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --allow-file-access-from-files \
+            --force-device-scale-factor=1 --window-size=1440,1900 --virtual-time-budget=2500 \
+            --user-data-dir="$profile" --screenshot="$EVIDENCE/contact-sheet.png" "file://$EVIDENCE/contact-sheet.html" \
+            >/dev/null 2>>"$EVIDENCE/logs/browser-console.log"
+          rm -rf "$profile"
+          test -s "$EVIDENCE/contact-sheet.png"
+          rm -f "$EVIDENCE/contact-sheet.html"
+
+          HEAD_SHA="$(git rev-parse HEAD)"
+          export HEAD_SHA EVIDENCE
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import os
+          import struct
+
+          evidence = Path(os.environ["EVIDENCE"])
+          head = os.environ["HEAD_SHA"]
+          routes = {
+              "S01":"/", "S02":"/services/", "S03":"/services/technical-review/", "S04":"/guided-choice/",
+              "S05":"/book/technical-review/", "S06":"/provider/schedule/", "S07":"/resources/schedule/",
+              "S08":"/operations/bookings/", "S09":"/operations/attendance/", "S10":"/admin/services/",
+              "S11":"/admin/providers-resources/", "S12":"/admin/availability-exceptions/", "login":"/login/",
+              "unauthorized":"/unauthorized/"
+          }
+
+          def png_dimensions(path):
+              with path.open("rb") as fh:
+                  if fh.read(8) != b"\x89PNG\r\n\x1a\n":
+                      raise RuntimeError(f"Not PNG: {path}")
+                  fh.read(8)
+                  return struct.unpack(">II", fh.read(8))
+
+          lines = ["name\troute\thead\tdimensions\tsha256"]
+          for name, route in routes.items():
+              path = evidence / "screenshots" / f"{name}.png"
+              width, height = png_dimensions(path)
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              if width != 1440:
+                  raise RuntimeError(f"{name} screenshot width is {width}, expected 1440")
+              lines.append(f"{name}\t{route}\t{head}\t{width}x{height}\t{digest}")
+
+          contact = evidence / "contact-sheet.png"
+          width, height = png_dimensions(contact)
+          digest = hashlib.sha256(contact.read_bytes()).hexdigest()
+          lines.append(f"CONTACT_SHEET\tALL_14\t{head}\t{width}x{height}\t{digest}")
+          (evidence / "screenshot-manifest.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+          if grep -Eiq 'ERROR:CONSOLE.*(Uncaught|SyntaxError|ReferenceError|TypeError)|Uncaught (SyntaxError|ReferenceError|TypeError)' "$EVIDENCE/logs/browser-console.log"; then
+            echo "Browser console/runtime JavaScript errors detected:" >&2
+            grep -Ei 'ERROR:CONSOLE.*(Uncaught|SyntaxError|ReferenceError|TypeError)|Uncaught (SyntaxError|ReferenceError|TypeError)' "$EVIDENCE/logs/browser-console.log" >&2
+            exit 1
+          fi
+
+          echo "CONSOLE ERRORS PASS" > "$EVIDENCE/console-runtime-result.txt"
+          echo "RUNTIME ERRORS PASS" >> "$EVIDENCE/console-runtime-result.txt"
+          cp "$EVIDENCE/screenshot-manifest.tsv" ./rp03-screenshot-manifest.tsv
+
+      - name: Record exact final-head Git validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git branch --force main "${{ github.event.pull_request.base.sha || '8e349d856f75b9b1c50308d0a197877e7cdef636' }}"
+          {
+            echo 'git status --short'
+            git status --short
+            echo
+            echo 'git diff --check'
+            git diff --check
+            echo
+            echo 'git diff --check main...HEAD'
+            git diff --check main...HEAD
+            echo
+            echo 'git diff --name-only main...HEAD'
+            git diff --name-only main...HEAD
+            echo
+            echo 'git log --oneline --decorate --max-count=15'
+            git log --oneline --decorate --max-count=15
+          } | tee rp03-git-validation.txt
+
+      - name: Upload final-head hardening evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp03-integration-hardening-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/screenshots/*.png
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/contact-sheet.png
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/screenshot-manifest.tsv
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/responsive-results.txt
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/security-results.txt
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/auth-results.txt
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/storage-results.txt
+            ${{ runner.temp }}/rp03-integration-hardening-evidence/console-runtime-result.txt
+            rp03-git-validation.txt
+          if-no-files-found: error
+          retention-days: 14

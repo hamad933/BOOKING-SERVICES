@@ -239,6 +239,12 @@
     String(date.getUTCDate()).padStart(2, "0")
   ].join("-");
 
+  const validDateKey = (value) => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = dateFromKey(value);
+    return Number.isFinite(parsed.getTime()) && keyFromDate(parsed) === value;
+  };
+
   const moveDateKey = (key, days) => keyFromDate(new Date(dateFromKey(key).getTime() + (days * DAY_MS)));
 
   const formatFullDate = (key) => new Intl.DateTimeFormat("ar-YE-u-nu-latn", {
@@ -278,11 +284,15 @@
   const restoreState = () => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
-      if (!saved || typeof saved !== "object") return;
-      if (typeof saved.selectedDateKey === "string") state.selectedDateKey = saved.selectedDateKey;
-      if (typeof saved.selectedResourceId === "string") state.selectedResourceId = saved.selectedResourceId;
-      if (typeof saved.selectedBlockId === "string") state.selectedBlockId = saved.selectedBlockId;
-      state.detailExpanded = Boolean(saved.detailExpanded);
+      if (!saved || typeof saved !== "object" || Array.isArray(saved)) return;
+      if (validDateKey(saved.selectedDateKey)) state.selectedDateKey = saved.selectedDateKey;
+      if (typeof saved.selectedResourceId === "string" && resources.some((resource) => resource.id === saved.selectedResourceId)) {
+        state.selectedResourceId = saved.selectedResourceId;
+      }
+      if (typeof saved.selectedBlockId === "string" && baseBlocks.some((block) => block.id === saved.selectedBlockId)) {
+        state.selectedBlockId = saved.selectedBlockId;
+      }
+      state.detailExpanded = saved.detailExpanded === true;
     } catch {
       // The deterministic fixture works without browser storage.
     }
