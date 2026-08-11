@@ -5,6 +5,9 @@
   const S05_STORAGE_KEY = "rp03.s05.booking.v1";
   const TIMEZONE = "Asia/Aden";
   const DAY_MS = 86400000;
+  const PREPARATION_STATES = new Set(["READY", "PENDING_REVIEW", "FOLLOW_UP_REQUIRED", "NOT_REQUIRED"]);
+  const PROOF_STATES = new Set(["PENDING", "VERIFIED", "FOLLOW_UP_REQUIRED"]);
+  const ATTENDANCE_OVERRIDE_STATES = new Set(["CHECKED_IN", "IN_PROGRESS", "COMPLETED", "NO_SHOW"]);
 
   const state = {
     bookingOverrides: {},
@@ -70,12 +73,38 @@
     year: options.compact ? undefined : "numeric"
   }).format(dateFromKey(key));
 
+  const validDateKey = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const validTime = (value) => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+
+  const sanitizeBookingOverrides = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).flatMap(([id, patch]) => {
+      if (typeof id !== "string" || !patch || typeof patch !== "object" || Array.isArray(patch)) return [];
+      const clean = {};
+      if (PREPARATION_STATES.has(patch.preparationState)) clean.preparationState = patch.preparationState;
+      if (PROOF_STATES.has(patch.proofState)) clean.proofState = patch.proofState;
+      return Object.keys(clean).length ? [[id, clean]] : [];
+    }));
+  };
+
+  const sanitizeAttendanceOverrides = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).flatMap(([id, patch]) => {
+      if (typeof id !== "string" || !patch || typeof patch !== "object" || Array.isArray(patch)) return [];
+      const clean = {};
+      if (ATTENDANCE_OVERRIDE_STATES.has(patch.baseState)) clean.baseState = patch.baseState;
+      if (typeof patch.note === "string") clean.note = patch.note.slice(0, 300);
+      if (typeof patch.followUpRequired === "boolean") clean.followUpRequired = patch.followUpRequired;
+      return Object.keys(clean).length ? [[id, clean]] : [];
+    }));
+  };
+
   const restore = () => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
-      if (!saved || typeof saved !== "object") return;
-      if (saved.bookingOverrides && typeof saved.bookingOverrides === "object") state.bookingOverrides = saved.bookingOverrides;
-      if (saved.attendanceOverrides && typeof saved.attendanceOverrides === "object") state.attendanceOverrides = saved.attendanceOverrides;
+      if (!saved || typeof saved !== "object" || Array.isArray(saved)) return;
+      state.bookingOverrides = sanitizeBookingOverrides(saved.bookingOverrides);
+      state.attendanceOverrides = sanitizeAttendanceOverrides(saved.attendanceOverrides);
       if (typeof saved.selectedBookingId === "string") state.selectedBookingId = saved.selectedBookingId;
       if (typeof saved.selectedSessionId === "string") state.selectedSessionId = saved.selectedSessionId;
     } catch {
@@ -138,14 +167,18 @@
   const readS05Booking = () => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(S05_STORAGE_KEY) || "null");
-      if (!saved || typeof saved !== "object" || !saved.confirmed || !saved.reference || !saved.selectedDate || !saved.selectedTime) {
+      if (
+        !saved || typeof saved !== "object" || Array.isArray(saved) || !saved.confirmed ||
+        typeof saved.reference !== "string" || !saved.reference.trim() ||
+        !validDateKey(saved.selectedDate) || !validTime(saved.selectedTime)
+      ) {
         return null;
       }
       return {
-        id: saved.reference,
-        guest: typeof saved.fullName === "string" && saved.fullName.trim() ? saved.fullName.trim() : "ضيف تجريبي حديث",
-        email: saved.contactKind === "email" && typeof saved.contactValue === "string" ? saved.contactValue : "",
-        contact: typeof saved.contactValue === "string" ? saved.contactValue : "",
+        id: saved.reference.trim().slice(0, 100),
+        guest: typeof saved.fullName === "string" && saved.fullName.trim() ? saved.fullName.trim().slice(0, 200) : "ضيف تجريبي حديث",
+        email: saved.contactKind === "email" && typeof saved.contactValue === "string" ? saved.contactValue.slice(0, 320) : "",
+        contact: typeof saved.contactValue === "string" ? saved.contactValue.slice(0, 320) : "",
         service: "جلسة مراجعة وتقييم تقني",
         dateKey: saved.selectedDate,
         start: saved.selectedTime,
@@ -224,22 +257,26 @@
   }));
 
   const updateBooking = (id, patch) => {
-    state.bookingOverrides[id] = { ...(state.bookingOverrides[id] || {}), ...patch };
+    const clean = sanitizeBookingOverrides({ [id]: patch })[id];
+    if (!clean) return;
+    state.bookingOverrides[id] = { ...(state.bookingOverrides[id] || {}), ...clean };
     save();
   };
 
   const updateAttendance = (id, patch) => {
-    state.attendanceOverrides[id] = { ...(state.attendanceOverrides[id] || {}), ...patch };
+    const clean = sanitizeAttendanceOverrides({ [id]: patch })[id];
+    if (!clean) return;
+    state.attendanceOverrides[id] = { ...(state.attendanceOverrides[id] || {}), ...clean };
     save();
   };
 
   const selectBooking = (id) => {
-    state.selectedBookingId = id;
+    state.selectedBookingId = typeof id === "string" ? id : null;
     save();
   };
 
   const selectSession = (id) => {
-    state.selectedSessionId = id;
+    state.selectedSessionId = typeof id === "string" ? id : null;
     save();
   };
 
