@@ -1,0 +1,247 @@
+name: RP03 Final Hardening Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-validation:
+    name: Validate clean tree, accessibility, language, and logout
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'chore/rp03-integration-hardening'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Required clean-tree Git validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/rp03-final-git-validation.txt"
+          git branch --force main "${{ github.event.pull_request.base.sha || '8e349d856f75b9b1c50308d0a197877e7cdef636' }}"
+          {
+            echo 'git status --short'
+            git status --short
+            echo
+            echo 'git diff --check'
+            git diff --check
+            echo
+            echo 'git diff --check main...HEAD'
+            git diff --check main...HEAD
+            echo
+            echo 'git diff --name-only main...HEAD'
+            git diff --name-only main...HEAD
+            echo
+            echo 'git log --oneline --decorate --max-count=15'
+            git log --oneline --decorate --max-count=15
+          } | tee "$OUT"
+
+          if [[ -n "$(git status --short)" ]]; then
+            echo 'Repository working tree is not clean.' >&2
+            git status --short >&2
+            exit 1
+          fi
+
+      - name: Static accessibility, RTL, and visible-language QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import re
+          import sys
+
+          routes = {
+              "/": Path("index.html"),
+              "/services/": Path("services/index.html"),
+              "/services/technical-review/": Path("services/technical-review/index.html"),
+              "/guided-choice/": Path("guided-choice/index.html"),
+              "/book/technical-review/": Path("book/technical-review/index.html"),
+              "/login/": Path("login/index.html"),
+              "/unauthorized/": Path("unauthorized/index.html"),
+              "/provider/schedule/": Path("provider/schedule/index.html"),
+              "/resources/schedule/": Path("resources/schedule/index.html"),
+              "/operations/bookings/": Path("operations/bookings/index.html"),
+              "/operations/attendance/": Path("operations/attendance/index.html"),
+              "/admin/services/": Path("admin/services/index.html"),
+              "/admin/providers-resources/": Path("admin/providers-resources/index.html"),
+              "/admin/availability-exceptions/": Path("admin/availability-exceptions/index.html"),
+          }
+
+          class AuditParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.html_attrs = None
+                  self.ids = set()
+                  self.h1_count = 0
+                  self.skip_targets = []
+                  self.images_without_alt = []
+                  self.controls = []
+                  self.labels_for = set()
+                  self.label_depth = 0
+                  self.visible = []
+                  self.in_script_or_style = 0
+                  self.tabs = []
+                  self.tablist_count = 0
+
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag == "html" and self.html_attrs is None:
+                      self.html_attrs = attrs
+                  if attrs.get("id"):
+                      self.ids.add(attrs["id"])
+                  if tag == "h1":
+                      self.h1_count += 1
+                  if tag == "a" and "skip-link" in attrs.get("class", "").split():
+                      self.skip_targets.append(attrs.get("href"))
+                  if tag == "img" and "alt" not in attrs:
+                      self.images_without_alt.append(attrs.get("src", "<unknown>"))
+                  if tag == "label":
+                      self.label_depth += 1
+                      if attrs.get("for"):
+                          self.labels_for.add(attrs["for"])
+                  if tag in {"script", "style"}:
+                      self.in_script_or_style += 1
+                  if tag in {"input", "select", "textarea"}:
+                      if tag == "input" and attrs.get("type", "text").lower() == "hidden":
+                          return
+                      self.controls.append({
+                          "tag": tag,
+                          "id": attrs.get("id"),
+                          "aria_label": attrs.get("aria-label"),
+                          "aria_labelledby": attrs.get("aria-labelledby"),
+                          "wrapped": self.label_depth > 0,
+                      })
+                  if attrs.get("role") == "tablist":
+                      self.tablist_count += 1
+                  if attrs.get("role") == "tab":
+                      self.tabs.append(attrs)
+
+              def handle_endtag(self, tag):
+                  if tag == "label" and self.label_depth:
+                      self.label_depth -= 1
+                  if tag in {"script", "style"} and self.in_script_or_style:
+                      self.in_script_or_style -= 1
+
+              def handle_data(self, data):
+                  if not self.in_script_or_style and data.strip():
+                      self.visible.append(data)
+
+          failures = []
+          mixed_attachment = re.compile(r"[\u0600-\u06ff][A-Za-z]|[A-Za-z][\u0600-\u06ff]")
+
+          for route, path in routes.items():
+              parser = AuditParser()
+              parser.feed(path.read_text(encoding="utf-8"))
+              attrs = parser.html_attrs or {}
+              if attrs.get("lang") != "ar" or attrs.get("dir") != "rtl":
+                  failures.append(f"{route}: html must use lang=ar and dir=rtl")
+              if parser.h1_count != 1:
+                  failures.append(f"{route}: expected exactly one H1, found {parser.h1_count}")
+              if "#main-content" not in parser.skip_targets or "main-content" not in parser.ids:
+                  failures.append(f"{route}: skip link/main-content pairing is missing")
+              if parser.images_without_alt:
+                  failures.append(f"{route}: images missing alt: {parser.images_without_alt}")
+
+              for control in parser.controls:
+                  labelled = (
+                      control["wrapped"] or
+                      bool(control["aria_label"]) or
+                      bool(control["aria_labelledby"]) or
+                      (control["id"] and control["id"] in parser.labels_for)
+                  )
+                  if not labelled:
+                      failures.append(f"{route}: unlabelled {control['tag']} id={control['id']!r}")
+
+              if parser.tablist_count:
+                  if not parser.tabs:
+                      failures.append(f"{route}: tablist has no role=tab controls")
+                  for tab in parser.tabs:
+                      if tab.get("aria-selected") not in {"true", "false"}:
+                          failures.append(f"{route}: tab {tab.get('id')!r} lacks aria-selected")
+                      if not tab.get("aria-controls"):
+                          failures.append(f"{route}: tab {tab.get('id')!r} lacks aria-controls")
+
+              visible = " ".join(parser.visible)
+              if "\ufffd" in visible:
+                  failures.append(f"{route}: replacement character found in visible text")
+              if mixed_attachment.search(visible):
+                  failures.append(f"{route}: Arabic/English token adhesion found in visible text")
+
+          css_text = "\n".join(path.read_text(encoding="utf-8") for path in Path("assets/css").glob("*.css"))
+          if ":focus-visible" not in css_text:
+              failures.append("CSS: no visible :focus-visible treatment found")
+
+          concealment_groups = {
+              "provider": Path("assets/css/provider-schedule.css"),
+              "resource": Path("assets/css/resource-schedule.css"),
+              "frontdesk": Path("assets/css/frontdesk.css"),
+              "admin": Path("assets/css/admin.css"),
+          }
+          for name, path in concealment_groups.items():
+              css = path.read_text(encoding="utf-8")
+              if "auth-pending" not in css or not re.search(r"visibility\s*:\s*hidden|display\s*:\s*none", css):
+                  failures.append(f"{name}: protected-content concealment rule not found")
+
+          if failures:
+              print("STATIC ACCESSIBILITY / RTL / LANGUAGE QA FAIL", file=sys.stderr)
+              for item in failures:
+                  print(f"- {item}", file=sys.stderr)
+              raise SystemExit(1)
+
+          print("LANGUAGE PASS")
+          print("RTL/LTR PASS")
+          print("ACCESSIBILITY STRUCTURE PASS")
+          print("PROTECTED CONTENT CONCEALMENT SOURCE PASS")
+          PY
+
+      - name: Explicit logout browser regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$CHROME" ]]; then
+            echo "A Chromium-compatible browser is required." >&2
+            exit 1
+          fi
+          python3 -m http.server 8766 --bind 127.0.0.1 >"$RUNNER_TEMP/rp03-final-http.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 1
+          PROFILE="$(mktemp -d)"
+          timeout 45 "$CHROME" \
+            --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --window-size=1440,900 --virtual-time-budget=5000 \
+            --user-data-dir="$PROFILE" --dump-dom \
+            "http://127.0.0.1:8766/.github/qa/rp03-logout-harness.html" \
+            >"$RUNNER_TEMP/rp03-logout-result.html" 2>"$RUNNER_TEMP/rp03-logout-console.log"
+          rm -rf "$PROFILE"
+          if ! grep -Fq 'data-result="PASS"' "$RUNNER_TEMP/rp03-logout-result.html"; then
+            echo "LOGOUT FAIL" >&2
+            cat "$RUNNER_TEMP/rp03-logout-result.html" >&2
+            exit 1
+          fi
+          if ! grep -Fq '"path":"/login/"' "$RUNNER_TEMP/rp03-logout-result.html" || ! grep -Fq '"sessionCleared":true' "$RUNNER_TEMP/rp03-logout-result.html"; then
+            echo "LOGOUT did not clear the session and return to /login/." >&2
+            exit 1
+          fi
+          echo "LOGOUT PASS"
+
+      - name: Re-run JavaScript syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(find assets/js -type f -name '*.js' -print0 | sort -z)
+          echo "ALL JAVASCRIPT SYNTAX PASS"
