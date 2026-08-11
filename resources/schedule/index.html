@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="جدول تشغيلي يومي لعرض إشغال الغرف والموارد وحالة الاستخدام المرتبطة بالجلسات.">
+  <title>جدول الغرف والموارد | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/resource-schedule.css">
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/resource-schedule.js" defer></script>
+</head>
+<body class="resource-page" data-auth-guard="CONSULTANT ADMIN" data-auth-pending="true">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+
+  <header class="resource-header">
+    <div class="resource-shell resource-header-inner">
+      <a class="brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path>
+            <path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path>
+            <path d="M18 27h12"></path>
+            <path d="M24 14v16"></path>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>مركز الاستشارات التقنية</strong>
+          <span lang="en" dir="ltr">Technical Consultation Center</span>
+        </span>
+      </a>
+
+      <nav class="resource-nav" aria-label="تنقل مساحة التشغيل">
+        <a href="/provider/schedule/">جدول المستشار</a>
+        <a href="/resources/schedule/" aria-current="page">الغرف والموارد</a>
+        <a href="/services/">دليل الخدمات</a>
+        <a href="/">الموقع العام</a>
+      </nav>
+
+      <div class="resource-account">
+        <span class="resource-avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1-5 4-7 8-7s7 2 8 7"></path></svg>
+        </span>
+        <span class="resource-account-copy">
+          <strong data-auth-display-name>مستخدم تجريبي</strong>
+          <span data-auth-role-label>دور محمي</span>
+        </span>
+        <button class="resource-logout" type="button" data-auth-logout>تسجيل الخروج</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="resource-main" id="main-content">
+    <div class="resource-shell">
+      <section class="resource-heading" aria-labelledby="resource-title">
+        <div>
+          <p class="eyebrow">مساحة تشغيل الموارد</p>
+          <h1 id="resource-title">جدول الغرف والموارد</h1>
+          <p>عرض يومي للغرف والموارد المستخدمة، مع حالة الإشغال وسياق الجلسة المرتبط بكل استخدام.</p>
+        </div>
+        <div class="resource-heading-meta">
+          <span class="timezone-badge">المنطقة الزمنية <strong lang="en" dir="ltr">Asia/Aden</strong></span>
+          <span class="now-badge" id="now-badge" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <section class="date-toolbar" aria-label="التنقل بين أيام جدول الموارد">
+        <div class="date-toolbar-nav">
+          <button type="button" id="previous-date" aria-label="عرض اليوم السابق">→ اليوم السابق</button>
+          <button type="button" id="next-date" aria-label="عرض اليوم التالي">اليوم التالي ←</button>
+        </div>
+        <div class="date-context" aria-live="polite">
+          <strong id="selected-date-label"></strong>
+          <span id="selected-date-sub-label"></span>
+        </div>
+        <button class="today-button" type="button" id="today-date">العودة إلى اليوم</button>
+      </section>
+
+      <section class="schedule-card" aria-labelledby="timeline-title">
+        <header class="timeline-heading">
+          <div>
+            <h2 id="timeline-title">الإشغال اليومي</h2>
+            <p>اختر أي كتلة زمنية أو موردًا لمراجعة السياق المرتبط به. جميع السجلات المعروضة بيانات اصطناعية.</p>
+          </div>
+          <div class="legend" aria-label="دليل حالات الجدول">
+            <span class="legend-item legend-available"><i aria-hidden="true"></i>متاح</span>
+            <span class="legend-item legend-booked"><i aria-hidden="true"></i>محجوز</span>
+            <span class="legend-item legend-blocked"><i aria-hidden="true"></i>محظور</span>
+            <span class="legend-item legend-preparation"><i aria-hidden="true"></i>تجهيز</span>
+            <span class="legend-item legend-ending"><i aria-hidden="true"></i>ينتهي قريبًا</span>
+          </div>
+        </header>
+
+        <div class="timeline-scroll" id="timeline-scroll" tabindex="0" aria-label="الجدول الزمني للغرف والموارد؛ قابل للتمرير أفقيًا عند الحاجة">
+          <div class="timeline-grid" id="timeline-grid">
+            <div class="timeline-corner" aria-hidden="true">المورد / الغرفة</div>
+            <div class="time-ruler" id="time-ruler" aria-hidden="true"></div>
+            <div class="current-time-line" id="current-time-line" hidden aria-hidden="true"><span id="current-time-label"></span></div>
+            <div class="resource-rows" id="resource-rows"></div>
+          </div>
+        </div>
+
+        <div class="timeline-empty" id="timeline-empty" role="status" hidden>
+          لا توجد إشغالات اصطناعية لهذا اليوم. اختر يومًا آخر أو عد إلى اليوم الحالي.
+        </div>
+
+        <footer class="timeline-footer">
+          <p id="timeline-current-context"></p>
+          <p><strong>حدّ السلطة:</strong> هذا السطح للعرض التشغيلي فقط؛ لا ينشئ حجزًا ولا يعيد تخصيص غرفة أو مورد.</p>
+        </footer>
+      </section>
+
+      <div class="resource-context-layout">
+        <aside class="detail-panel" id="detail-panel" tabindex="-1" aria-labelledby="detail-title">
+          <header class="detail-header">
+            <div>
+              <p class="detail-kicker" id="detail-kicker">سياق الاستخدام المحدد</p>
+              <h2 id="detail-title">اختر موردًا أو جلسة</h2>
+              <p id="detail-subtitle">ستظهر هنا تفاصيل الاستخدام المرتبط بالاختيار.</p>
+            </div>
+            <span class="detail-status" id="detail-status">—</span>
+          </header>
+
+          <dl class="detail-facts" id="detail-facts">
+            <div><dt>المورد</dt><dd id="detail-resource">—</dd></div>
+            <div><dt>الوقت</dt><dd id="detail-time" dir="ltr">—</dd></div>
+            <div><dt>رقم الحجز</dt><dd id="detail-booking-id" dir="ltr">—</dd></div>
+            <div><dt>الخدمة</dt><dd id="detail-service">—</dd></div>
+            <div><dt>المستشار</dt><dd id="detail-consultant">—</dd></div>
+            <div><dt>طريقة الجلسة</dt><dd id="detail-mode">—</dd></div>
+          </dl>
+
+          <div class="detail-actions">
+            <button class="button button-primary" id="detail-context-toggle" type="button" aria-expanded="false" aria-controls="detail-extra">عرض تفاصيل السياق</button>
+            <p>عرض فقط — لا توجد إجراءات حجز أو إعادة تخصيص في S07.</p>
+          </div>
+
+          <section class="detail-extra" id="detail-extra" hidden aria-label="تفاصيل إضافية للسياق المحدد">
+            <dl>
+              <div><dt>السعة</dt><dd id="detail-capacity">—</dd></div>
+              <div><dt>حالة الإشغال</dt><dd id="detail-occupancy">—</dd></div>
+              <div><dt>ملاحظة تشغيلية</dt><dd id="detail-note">—</dd></div>
+            </dl>
+          </section>
+        </aside>
+
+        <section class="attention-panel" aria-labelledby="attention-title">
+          <header>
+            <div>
+              <p class="eyebrow">تنبيهات وملاحظات محدودة</p>
+              <h2 id="attention-title">ما يحتاج انتباهًا</h2>
+            </div>
+            <span class="attention-count" id="attention-count"></span>
+          </header>
+          <ul class="attention-list" id="attention-list"></ul>
+          <p class="attention-empty" id="attention-empty" role="status" hidden>لا توجد ملاحظات تشغيلية بارزة لهذا اليوم.</p>
+        </section>
+      </div>
+
+      <p class="resource-announcer" id="resource-announcer" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </main>
+
+  <footer class="resource-footer">
+    <div class="resource-shell resource-footer-inner">
+      <p>© 2026 مركز الاستشارات التقنية. بيانات الجدول المعروضة اصطناعية لأغراض العرض المحلي.</p>
+      <p><span lang="en" dir="ltr">Asia/Aden</span> — توقيت الجدول</p>
+    </div>
+  </footer>
+</body>
+</html>
