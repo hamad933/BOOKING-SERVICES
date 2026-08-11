@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="احجز جلسة مراجعة وتقييم تقني عبر اختيار طريقة الجلسة والتاريخ والوقت وإدخال معلومات التواصل الأساسية.">
+  <title>حجز جلسة مراجعة وتقييم تقني | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/booking.css">
+  <script src="/assets/js/booking.js" defer></script>
+</head>
+<body class="booking-page">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path>
+            <path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path>
+            <path d="M18 27h12"></path>
+            <path d="M24 14v16"></path>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>مركز الاستشارات التقنية</strong>
+          <span lang="en" dir="ltr">Technical Consultation Center</span>
+        </span>
+      </a>
+
+      <nav class="primary-nav" aria-label="التنقل الرئيسي">
+        <a href="/services/" aria-current="page">الخدمات</a>
+        <a href="/#how-it-works">كيف تعمل التجربة</a>
+        <a href="/#trust">عن المركز</a>
+        <a href="#help">المساعدة</a>
+        <a href="/login/" data-deferred-target="RP03 login">تسجيل الدخول</a>
+      </nav>
+
+      <a class="button button-primary header-cta" href="/guided-choice/">ابدأ استشارتك</a>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <div class="shell booking-breadcrumb-wrap">
+      <nav class="booking-breadcrumb" aria-label="مسار التنقل">
+        <a href="/">الرئيسية</a><span aria-hidden="true">/</span>
+        <a href="/services/">الخدمات</a><span aria-hidden="true">/</span>
+        <a href="/services/technical-review/">جلسة مراجعة وتقييم تقني</a><span aria-hidden="true">/</span>
+        <span aria-current="page">الحجز</span>
+      </nav>
+    </div>
+
+    <section class="booking-intro" aria-labelledby="booking-title">
+      <div class="shell booking-intro-inner">
+        <div>
+          <p class="eyebrow">التوفر والحجز</p>
+          <h1 id="booking-title">احجز موعد جلستك</h1>
+          <p>اختر طريقة الجلسة والتاريخ والوقت المناسب، ثم أدخل معلومات التواصل الأساسية لتأكيد اختيارك.</p>
+        </div>
+        <a class="button button-secondary detail-return" href="/services/technical-review/">
+          العودة إلى تفاصيل الخدمة <span aria-hidden="true">←</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="booking-workspace" aria-label="خطوات الحجز">
+      <div class="shell booking-layout">
+        <div class="booking-main" id="booking-flow">
+          <section class="booking-step service-step" aria-labelledby="service-step-title">
+            <header class="step-heading">
+              <span class="step-number" aria-hidden="true">1</span>
+              <div>
+                <p class="step-kicker">الخدمة المختارة</p>
+                <h2 id="service-step-title">جلسة مراجعة وتقييم تقني</h2>
+              </div>
+              <a class="change-service" href="/services/">تغيير الخدمة</a>
+            </header>
+
+            <div class="selected-service">
+              <span class="service-visual" aria-hidden="true">
+                <svg viewBox="0 0 56 56">
+                  <circle cx="23" cy="23" r="12"></circle>
+                  <path d="m32 32 9 9M18 23h10M23 18v10"></path>
+                  <path d="M38 15h10v23h-7M38 21h6M38 26h6M38 31h4"></path>
+                </svg>
+              </span>
+              <div class="service-copy">
+                <p>مراجعة منظمة لوضع تقني قائم أو قرار، مع تحديد نقاط القوة والفجوات وترتيب أولويات التحسين.</p>
+                <dl class="service-facts" aria-label="معلومات الخدمة المختارة">
+                  <div><dt>المدة</dt><dd><span dir="ltr">60–90</span> دقيقة</dd></div>
+                  <div><dt>طريقة الجلسة</dt><dd>حضوري أو عن بُعد</dd></div>
+                  <div><dt>التحضير</dt><dd>مستندات أو معلومات أساسية</dd></div>
+                </dl>
+              </div>
+            </div>
+          </section>
+
+          <section class="booking-step" aria-labelledby="mode-step-title">
+            <header class="step-heading compact">
+              <span class="step-number" aria-hidden="true">2</span>
+              <div>
+                <p class="step-kicker">طريقة الجلسة</p>
+                <h2 id="mode-step-title">كيف تفضّل حضور الجلسة؟</h2>
+              </div>
+            </header>
+
+            <fieldset class="mode-fieldset" aria-describedby="mode-error">
+              <legend class="sr-only">اختر طريقة الجلسة</legend>
+              <label class="mode-option">
+                <input type="radio" name="session-mode" value="remote" checked>
+                <span class="mode-control" aria-hidden="true"></span>
+                <span class="mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 28 28"><rect x="4" y="5" width="20" height="14" rx="2"></rect><path d="M9 23h10M14 19v4M8 10h12"></path></svg>
+                </span>
+                <span class="mode-copy">
+                  <strong>عن بُعد</strong>
+                  <small>جلسة عن بُعد وفق ترتيبات الجلسة المعتمدة.</small>
+                </span>
+              </label>
+
+              <label class="mode-option">
+                <input type="radio" name="session-mode" value="in-person">
+                <span class="mode-control" aria-hidden="true"></span>
+                <span class="mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 28 28"><circle cx="10" cy="10" r="4"></circle><circle cx="20" cy="12" r="3"></circle><path d="M3 24c1-6 4-9 8-9s7 3 8 9M17 18c4 0 6 2 7 6"></path></svg>
+                </span>
+                <span class="mode-copy">
+                  <strong>حضوري</strong>
+                  <small>في مقر مركز الاستشارات التقنية.</small>
+                </span>
+              </label>
+            </fieldset>
+            <p class="field-error" id="mode-error" role="alert" hidden></p>
+          </section>
+
+          <section class="booking-step" aria-labelledby="date-step-title">
+            <header class="step-heading compact date-heading">
+              <span class="step-number" aria-hidden="true">3</span>
+              <div>
+                <p class="step-kicker">التاريخ</p>
+                <h2 id="date-step-title">اختر تاريخًا متاحًا</h2>
+                <p class="step-context">جميع الأوقات حسب <span lang="en" dir="ltr">Asia/Aden</span>.</p>
+              </div>
+              <div class="date-navigation" aria-label="التنقل بين التواريخ">
+                <button type="button" id="date-prev" aria-label="عرض الأيام السابقة">
+                  <span aria-hidden="true">→</span>
+                </button>
+                <button type="button" id="date-next" aria-label="عرض الأيام التالية">
+                  <span aria-hidden="true">←</span>
+                </button>
+              </div>
+            </header>
+
+            <div class="date-strip" id="date-strip" role="group" aria-label="تواريخ الحجز" aria-describedby="date-error"></div>
+            <p class="horizon-note">
+              <span aria-hidden="true">◷</span>
+              نطاق الحجز المتاح: حتى <strong><span dir="ltr">45</span> يومًا</strong> من اليوم.
+            </p>
+            <p class="field-error" id="date-error" role="alert" hidden></p>
+          </section>
+
+          <section class="booking-step" aria-labelledby="time-step-title">
+            <header class="step-heading compact">
+              <span class="step-number" aria-hidden="true">4</span>
+              <div>
+                <p class="step-kicker">الوقت</p>
+                <h2 id="time-step-title">اختر الوقت المتاح</h2>
+                <p class="step-context">التوقيت: <span lang="en" dir="ltr">Asia/Aden</span>.</p>
+              </div>
+            </header>
+
+            <div class="time-state" id="time-state">
+              <div class="time-grid" id="time-grid" role="group" aria-label="الأوقات المتاحة" aria-describedby="time-error"></div>
+              <div class="empty-availability" id="empty-availability" role="status" hidden>
+                <span aria-hidden="true">○</span>
+                <div>
+                  <strong>لا توجد أوقات متاحة في هذا اليوم.</strong>
+                  <p>اختر تاريخًا آخر ضمن نطاق الحجز.</p>
+                </div>
+              </div>
+            </div>
+            <p class="field-error" id="time-error" role="alert" hidden></p>
+
+            <div class="stale-warning" id="stale-warning" role="alert" aria-live="assertive" tabindex="-1" hidden>
+              <strong>لم يعد الوقت الذي اخترته متاحًا.</strong>
+              <p>اختر وقتًا متاحًا آخر للمتابعة. تم تحديث قائمة الأوقات في هذه الصفحة.</p>
+            </div>
+          </section>
+
+          <section class="booking-step contact-step" aria-labelledby="contact-step-title">
+            <header class="step-heading compact">
+              <span class="step-number" aria-hidden="true">5</span>
+              <div>
+                <p class="step-kicker">معلومات التواصل</p>
+                <h2 id="contact-step-title">أدخل معلوماتك الأساسية</h2>
+                <p class="step-context">لا تحتاج إلى إنشاء حساب لإكمال هذه الخطوة.</p>
+              </div>
+            </header>
+
+            <div class="contact-grid">
+              <div class="field-group">
+                <label for="full-name">الاسم الكامل</label>
+                <input
+                  id="full-name"
+                  name="full-name"
+                  type="text"
+                  autocomplete="name"
+                  placeholder="أدخل اسمك الكامل"
+                  aria-describedby="full-name-error"
+                  required
+                >
+                <p class="field-error" id="full-name-error" role="alert" hidden></p>
+              </div>
+
+              <div class="field-group">
+                <label for="contact-kind">وسيلة التواصل</label>
+                <select id="contact-kind" name="contact-kind">
+                  <option value="email">البريد الإلكتروني</option>
+                  <option value="phone">رقم الهاتف</option>
+                </select>
+              </div>
+
+              <div class="field-group contact-value-group">
+                <label for="contact-value" id="contact-value-label">البريد الإلكتروني</label>
+                <input
+                  id="contact-value"
+                  name="contact-value"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="email"
+                  placeholder="name@example.com"
+                  dir="ltr"
+                  aria-describedby="contact-value-help contact-value-error"
+                  required
+                >
+                <p class="field-help" id="contact-value-help">أدخل وسيلة تواصل يمكن الرجوع إليها بخصوص الحجز.</p>
+                <p class="field-error" id="contact-value-error" role="alert" hidden></p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="booking-aside" aria-labelledby="summary-title">
+          <section class="booking-summary" id="booking-summary">
+            <header>
+              <p class="summary-kicker">اختيارك الحالي</p>
+              <h2 id="summary-title">ملخص الحجز</h2>
+            </header>
+
+            <dl class="summary-list" aria-live="polite" aria-atomic="false">
+              <div>
+                <dt>الخدمة</dt>
+                <dd>جلسة مراجعة وتقييم تقني</dd>
+              </div>
+              <div>
+                <dt>طريقة الجلسة</dt>
+                <dd id="summary-mode">عن بُعد</dd>
+              </div>
+              <div>
+                <dt>التاريخ</dt>
+                <dd id="summary-date">—</dd>
+              </div>
+              <div>
+                <dt>الوقت</dt>
+                <dd id="summary-time">—</dd>
+              </div>
+              <div>
+                <dt>المدة</dt>
+                <dd><span dir="ltr">60–90</span> دقيقة</dd>
+              </div>
+              <div>
+                <dt>التوقيت</dt>
+                <dd><span lang="en" dir="ltr">Asia/Aden</span></dd>
+              </div>
+            </dl>
+
+            <div class="summary-contact">
+              <strong>معلومات التواصل</strong>
+              <p id="summary-contact">أكمل الاسم ووسيلة التواصل.</p>
+            </div>
+
+            <button class="button button-primary confirm-booking" id="confirm-booking" type="button">
+              تأكيد الحجز
+              <span aria-hidden="true">←</span>
+            </button>
+            <p class="summary-validation" id="summary-validation" role="alert" hidden></p>
+          </section>
+        </aside>
+
+        <section class="confirmation-panel" id="confirmation-panel" role="status" aria-live="polite" tabindex="-1" hidden>
+          <span class="confirmation-icon" aria-hidden="true">✓</span>
+          <p class="eyebrow">اكتملت الخطوة</p>
+          <h2>تم تأكيد اختيارك مؤقتًا لهذه الجلسة</h2>
+          <p>تم حفظ تفاصيل الموعد في جلسة المتصفح الحالية. يمكنك مراجعة الملخص أدناه أو العودة إلى الخدمات.</p>
+          <dl class="confirmation-details" id="confirmation-details"></dl>
+          <p class="local-reference">مرجع مؤقت: <strong id="local-reference" dir="ltr"></strong></p>
+          <div class="confirmation-actions">
+            <button class="button button-secondary" id="edit-booking" type="button">تعديل الاختيار</button>
+            <a class="button button-primary" href="/services/">العودة إلى الخدمات</a>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" id="help">
+    <div class="shell footer-grid">
+      <div class="footer-brand">
+        <a class="brand brand-footer" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path>
+              <path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path>
+              <path d="M18 27h12"></path>
+              <path d="M24 14v16"></path>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>مركز الاستشارات التقنية</strong>
+            <span lang="en" dir="ltr">Technical Consultation Center</span>
+          </span>
+        </a>
+        <p>استشارات تقنية مهنية تبدأ من فهم احتياجك وتساعدك على الوصول إلى خطوات عملية واضحة.</p>
+      </div>
+
+      <nav aria-label="روابط الخدمات">
+        <h2>الخدمات</h2>
+        <a href="/services/">جميع الخدمات</a>
+        <a href="/guided-choice/">التوجيه لاختيار الخدمة</a>
+      </nav>
+
+      <nav aria-label="روابط التجربة">
+        <h2>كيف تعمل التجربة</h2>
+        <a href="/#how-it-works">خطوات التجربة</a>
+        <a href="/#trust">ما الذي تتوقعه</a>
+        <a href="/#trust">الثقة المهنية</a>
+      </nav>
+
+      <nav aria-label="روابط المركز">
+        <h2>عن المركز</h2>
+        <a href="/#trust">نهجنا</a>
+        <a href="/#trust">طبيعة الاستشارات</a>
+        <a href="#help">المساعدة</a>
+      </nav>
+
+      <nav aria-label="روابط الحساب">
+        <h2>الحساب</h2>
+        <a href="/login/" data-deferred-target="RP03 login">تسجيل الدخول</a>
+      </nav>
+    </div>
+
+    <div class="shell footer-bottom">
+      <p>© 2026 مركز الاستشارات التقنية. جميع الحقوق محفوظة.</p>
+      <p><span lang="en" dir="ltr">RP03 — Booking &amp; Services</span></p>
+    </div>
+  </footer>
+</body>
+</html>
