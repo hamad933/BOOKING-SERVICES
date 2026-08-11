@@ -7,6 +7,7 @@
     linear-gradient(180deg, #ffffff 0%, #f7f9fb 56%, #ffffff 100%);
 }
 
+.provider-page[data-auth-pending="true"] .provider-header,
 .provider-page[data-auth-pending="true"] .provider-main,
 .provider-page[data-auth-pending="true"] .provider-footer {
   visibility: hidden;
@@ -217,7 +218,6 @@
 .today-button {
   justify-self: end;
 }
-
 .schedule-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
@@ -437,7 +437,6 @@
   background: #fafcfd;
   text-align: center;
 }
-
 .agenda-empty[hidden] {
   display: none;
 }
@@ -657,7 +656,6 @@
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
 }
-
 .provider-footer {
   border-top: 1px solid #e8edf2;
   background: #fff;
