@@ -7,20 +7,23 @@
     GUEST: "GUEST",
     AUTHENTICATED_CUSTOMER: "AUTHENTICATED_CUSTOMER",
     ADMIN: "ADMIN",
-    CONSULTANT: "CONSULTANT"
+    CONSULTANT: "CONSULTANT",
+    FRONT_DESK: "FRONT_DESK"
   });
 
   const ROLE_LABELS = Object.freeze({
     GUEST: "زائر",
     AUTHENTICATED_CUSTOMER: "عميل مسجّل",
     ADMIN: "مسؤول",
-    CONSULTANT: "مستشار تقني"
+    CONSULTANT: "مستشار تقني",
+    FRONT_DESK: "موظف الاستقبال"
   });
 
   const ROLE_DESTINATIONS = Object.freeze({
     AUTHENTICATED_CUSTOMER: "/",
     ADMIN: "/",
-    CONSULTANT: "/provider/schedule/"
+    CONSULTANT: "/provider/schedule/",
+    FRONT_DESK: "/operations/bookings/"
   });
 
   const isKnownRole = (role) => Object.values(ROLES).includes(role);
@@ -83,21 +86,32 @@
 
   const currentRole = () => readSession()?.role || ROLES.GUEST;
   const roleLabel = (role = currentRole()) => ROLE_LABELS[role] || ROLE_LABELS.GUEST;
-
   const defaultDestination = (role = currentRole()) => ROLE_DESTINATIONS[role] || "/";
+
+  const requiredRolesForPath = (path) => {
+    if (path === "/provider/schedule/" || path.startsWith("/provider/schedule/?")) {
+      return [ROLES.CONSULTANT];
+    }
+    if (
+      path === "/operations/bookings/" || path.startsWith("/operations/bookings/?") ||
+      path === "/operations/attendance/" || path.startsWith("/operations/attendance/?")
+    ) {
+      return [ROLES.FRONT_DESK];
+    }
+    if (path === "/resources/schedule/" || path.startsWith("/resources/schedule/?")) {
+      return [ROLES.CONSULTANT, ROLES.ADMIN];
+    }
+    return null;
+  };
 
   const redirectAfterEntry = (role, requestedReturn) => {
     const safe = safeReturnPath(requestedReturn);
+    const required = safe ? requiredRolesForPath(safe) : null;
 
-    if (safe === "/provider/schedule/" || safe.startsWith("/provider/schedule/?")) {
-      if (role === ROLES.CONSULTANT) {
-        window.location.assign(safe);
-        return;
-      }
-
+    if (safe && required && !required.includes(role)) {
       const denied = new URL("/unauthorized/", window.location.origin);
       denied.searchParams.set("from", safe);
-      denied.searchParams.set("required", ROLES.CONSULTANT);
+      denied.searchParams.set("required", required.join(","));
       window.location.assign(`${denied.pathname}${denied.search}`);
       return;
     }
@@ -106,14 +120,15 @@
   };
 
   const createDemoSession = (role, requestedReturn = null) => {
-    const allowedDemoRoles = [ROLES.AUTHENTICATED_CUSTOMER, ROLES.CONSULTANT];
+    const allowedDemoRoles = [ROLES.AUTHENTICATED_CUSTOMER, ROLES.CONSULTANT, ROLES.FRONT_DESK];
     if (!allowedDemoRoles.includes(role)) {
       return { ok: false, reason: "ROLE_NOT_AVAILABLE_FOR_DEMO_ENTRY" };
     }
 
     const names = {
       AUTHENTICATED_CUSTOMER: "عميل تجريبي",
-      CONSULTANT: "المستشار أحمد س."
+      CONSULTANT: "المستشار أحمد س.",
+      FRONT_DESK: "موظف الاستقبال التجريبي"
     };
 
     const session = writeSession(role, names[role], "bounded-demo-entry");
@@ -191,7 +206,7 @@
       sessionPanel.hidden = false;
       sessionPanel.querySelector("[data-current-role]").textContent = roleLabel(activeSession.role);
       const continueLink = sessionPanel.querySelector("[data-session-continue]");
-      continueLink.href = activeSession.role === ROLES.CONSULTANT ? "/provider/schedule/" : defaultDestination(activeSession.role);
+      continueLink.href = defaultDestination(activeSession.role);
     }
 
     form?.addEventListener("submit", (event) => {
@@ -219,9 +234,12 @@
     root.querySelectorAll("[data-demo-role]").forEach((button) => {
       button.addEventListener("click", () => {
         const role = button.dataset.demoRole;
-        announcer.textContent = role === ROLES.CONSULTANT
-          ? "جارٍ إنشاء جلسة مستشار تجريبية محلية."
-          : "جارٍ إنشاء جلسة عميل تجريبية محلية.";
+        const messages = {
+          CONSULTANT: "جارٍ إنشاء جلسة مستشار تجريبية محلية.",
+          FRONT_DESK: "جارٍ إنشاء جلسة موظف استقبال تجريبية محلية.",
+          AUTHENTICATED_CUSTOMER: "جارٍ إنشاء جلسة عميل تجريبية محلية."
+        };
+        announcer.textContent = messages[role] || "جارٍ إنشاء جلسة تجريبية محلية.";
         createDemoSession(role, returnPath);
       });
     });
@@ -237,8 +255,12 @@
 
     if (session) {
       roleNode.textContent = roleLabel(session.role);
-      action.textContent = session.role === ROLES.CONSULTANT ? "العودة إلى جدولي" : "العودة إلى الصفحة الرئيسية";
-      action.href = session.role === ROLES.CONSULTANT ? "/provider/schedule/" : "/";
+      const labels = {
+        CONSULTANT: "العودة إلى جدولي",
+        FRONT_DESK: "العودة إلى إدارة الحجوزات"
+      };
+      action.textContent = labels[session.role] || "العودة إلى الصفحة الرئيسية";
+      action.href = defaultDestination(session.role);
     } else {
       roleNode.textContent = ROLE_LABELS.GUEST;
       action.textContent = "تسجيل الدخول";
