@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="دخول تجريبي محلي إلى الأدوار المحمية في تطبيق مركز الاستشارات التقنية.">
+  <title>الدخول إلى مساحة العمل | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/auth.css">
+  <script src="/assets/js/auth.js" defer></script>
+</head>
+<body class="auth-page">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+
+  <header class="auth-header">
+    <div class="auth-shell auth-header-inner">
+      <a class="brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path>
+            <path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path>
+            <path d="M18 27h12"></path>
+            <path d="M24 14v16"></path>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>مركز الاستشارات التقنية</strong>
+          <span lang="en" dir="ltr">Technical Consultation Center</span>
+        </span>
+      </a>
+      <a class="auth-home-link" href="/">العودة إلى الموقع</a>
+    </div>
+  </header>
+
+  <main class="auth-main" id="main-content" data-auth-login>
+    <div class="auth-shell auth-layout">
+      <section class="auth-intro" aria-labelledby="login-title">
+        <p class="eyebrow">وصول الأدوار المحمية</p>
+        <h1 id="login-title">الدخول إلى مساحة العمل</h1>
+        <p>استخدم بيانات المسؤول المعتمدة للعرض، أو اختر دخولًا تجريبيًا لأحد الأدوار التي لا تملك بيانات ثابتة. هذا الدخول محلي داخل جلسة المتصفح ولا يمثل نظام هوية إنتاجيًا.</p>
+        <div class="auth-boundary-note">
+          هذه محاكاة محلية لواجهة التطبيق فقط. لا تمثل نظام مصادقة إنتاجيًا، ولا تتحقق من هوية حقيقية، ولا ترسل بيانات الدخول إلى خادم.
+        </div>
+      </section>
+
+      <section class="auth-card" aria-label="خيارات الدخول">
+        <div class="auth-card-section">
+          <div class="auth-session" id="active-session" hidden>
+            <p>توجد جلسة محلية نشطة بدور: <strong data-current-role></strong>.</p>
+            <div class="auth-session-actions">
+              <a class="button button-primary" data-session-continue href="/">متابعة</a>
+              <button class="button button-secondary" type="button" data-auth-logout>تسجيل الخروج</button>
+            </div>
+          </div>
+
+          <h2>دخول المسؤول</h2>
+          <p class="auth-card-copy">هذا النموذج يدعم فقط بيانات المسؤول التجريبية المعتمدة حاليًا.</p>
+
+          <form class="auth-form" id="demo-login-form" novalidate>
+            <div class="auth-field">
+              <label for="demo-username">اسم المستخدم</label>
+              <input id="demo-username" name="username" type="text" autocomplete="username" dir="ltr" required aria-describedby="login-error">
+            </div>
+            <div class="auth-field">
+              <label for="demo-password">كلمة المرور</label>
+              <input id="demo-password" name="password" type="password" autocomplete="current-password" dir="ltr" required aria-describedby="login-error">
+            </div>
+            <p class="auth-error" id="login-error" role="alert" hidden></p>
+            <button class="button button-primary auth-submit" type="submit">تسجيل الدخول</button>
+          </form>
+
+          <p class="demo-credential-hint">بيانات المسؤول التجريبية: <code>admin / admin</code></p>
+        </div>
+
+        <div class="auth-card-section">
+          <h2>دخول تجريبي بدون بيانات ثابتة</h2>
+          <p class="auth-card-copy">هذه الأدوار تُنشئ جلسة محلية اصطناعية فقط ولا تمثل تحققًا من هوية حقيقية.</p>
+          <div class="demo-role-grid">
+            <button class="demo-role-button" type="button" data-demo-role="CONSULTANT">
+              <strong>دخول تجريبي كمستشار</strong>
+              <small>يفتح مساحة جدول مقدم الخدمة المحمية.</small>
+            </button>
+            <button class="demo-role-button" type="button" data-demo-role="AUTHENTICATED_CUSTOMER">
+              <strong>دخول تجريبي كعميل</strong>
+              <small>ينشئ جلسة عميل محلية دون إنشاء بوابة دائمة.</small>
+            </button>
+          </div>
+          <p class="sr-only" id="login-announcer" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
