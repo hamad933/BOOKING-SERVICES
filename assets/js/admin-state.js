@@ -281,17 +281,136 @@
   });
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
+  const asString = (value, fallback = "") => typeof value === "string" ? value : fallback;
+  const asBoolean = (value, fallback = false) => typeof value === "boolean" ? value : fallback;
+  const asStringList = (value, allowed = null) => Array.isArray(value)
+    ? value.filter((item) => typeof item === "string" && (!allowed || allowed.has(item))).slice(0, 50)
+    : [];
+  const validTime = (value) => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  const validDate = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const SESSION_MODES = new Set(["حضوري", "عن بُعد"]);
+  const SCOPE_TYPES = new Set(["CENTER", "SERVICE", "PROVIDER", "RESOURCE"]);
+  const EXCEPTION_TYPES = new Set(["CLOSURE", "MAINTENANCE", "PROVIDER_LEAVE", "MODIFIED_HOURS", "INTERNAL_BLOCK"]);
+  const EXCEPTION_STATES = new Set(["ACTIVE", "SCHEDULED", "PENDING_REVIEW", "ENDED"]);
+
+  const normalizeCollection = (value, normalizer, fallback) => {
+    if (!Array.isArray(value)) return clone(fallback);
+    return value.map(normalizer).filter(Boolean);
+  };
+
+  const normalizeService = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const id = asString(item.id).trim();
+    const title = asString(item.title).trim();
+    const description = asString(item.description).trim();
+    const category = asString(item.category).trim();
+    const duration = asString(item.duration).trim();
+    if (!id || !title || !description || !category || !duration) return null;
+    return {
+      id,
+      title,
+      description,
+      category,
+      duration,
+      modes: asStringList(item.modes, SESSION_MODES),
+      preparationRequired: asBoolean(item.preparationRequired),
+      preparationSummary: asString(item.preparationSummary),
+      active: asBoolean(item.active),
+      origin: asString(item.origin, "synthetic-admin-local")
+    };
+  };
+
+  const normalizeProvider = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const id = asString(item.id).trim();
+    const name = asString(item.name).trim();
+    const role = asString(item.role).trim();
+    if (!id || !name || !role) return null;
+    return {
+      id,
+      name,
+      role,
+      specialties: asStringList(item.specialties),
+      experience: asString(item.experience),
+      modes: asStringList(item.modes, SESSION_MODES),
+      active: asBoolean(item.active),
+      notes: asString(item.notes)
+    };
+  };
+
+  const normalizeResource = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const id = asString(item.id).trim();
+    const name = asString(item.name).trim();
+    const type = asString(item.type).trim();
+    const capacity = Number(item.capacity);
+    if (!id || !name || !type || !Number.isFinite(capacity) || capacity < 1) return null;
+    return {
+      id,
+      name,
+      type,
+      capacity,
+      characteristics: asStringList(item.characteristics),
+      active: asBoolean(item.active),
+      notes: asString(item.notes)
+    };
+  };
+
+  const normalizeRule = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const id = asString(item.id).trim();
+    const title = asString(item.title).trim();
+    const scopeLabel = asString(item.scopeLabel).trim();
+    const days = asString(item.days).trim();
+    if (!id || !title || !SCOPE_TYPES.has(item.scopeType) || !scopeLabel || !days || !validTime(item.startTime) || !validTime(item.endTime)) return null;
+    return {
+      id,
+      title,
+      scopeType: item.scopeType,
+      scopeLabel,
+      days,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      active: asBoolean(item.active),
+      notes: asString(item.notes)
+    };
+  };
+
+  const normalizeException = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const id = asString(item.id).trim();
+    const title = asString(item.title).trim();
+    const scopeLabel = asString(item.scopeLabel).trim();
+    if (
+      !id || !title || !EXCEPTION_TYPES.has(item.type) || !SCOPE_TYPES.has(item.scopeType) || !scopeLabel ||
+      !validDate(item.startDate) || !validDate(item.endDate) || !validTime(item.startTime) || !validTime(item.endTime) ||
+      !EXCEPTION_STATES.has(item.state)
+    ) return null;
+    return {
+      id,
+      type: item.type,
+      title,
+      scopeType: item.scopeType,
+      scopeLabel,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      state: item.state,
+      notes: asString(item.notes)
+    };
+  };
 
   const normalizeState = (value) => {
     const fallback = seedState();
     if (!value || typeof value !== "object") return fallback;
     return {
       version: 1,
-      services: Array.isArray(value.services) ? value.services : fallback.services,
-      providers: Array.isArray(value.providers) ? value.providers : fallback.providers,
-      resources: Array.isArray(value.resources) ? value.resources : fallback.resources,
-      availabilityRules: Array.isArray(value.availabilityRules) ? value.availabilityRules : fallback.availabilityRules,
-      exceptions: Array.isArray(value.exceptions) ? value.exceptions : fallback.exceptions
+      services: normalizeCollection(value.services, normalizeService, fallback.services),
+      providers: normalizeCollection(value.providers, normalizeProvider, fallback.providers),
+      resources: normalizeCollection(value.resources, normalizeResource, fallback.resources),
+      availabilityRules: normalizeCollection(value.availabilityRules, normalizeRule, fallback.availabilityRules),
+      exceptions: normalizeCollection(value.exceptions, normalizeException, fallback.exceptions)
     };
   };
 
@@ -311,7 +430,11 @@
 
   const save = (state) => {
     const normalized = normalizeState(state);
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    } catch {
+      // Admin fixtures remain usable even when sessionStorage is inaccessible.
+    }
     return clone(normalized);
   };
 
