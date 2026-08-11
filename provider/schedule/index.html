@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="جدول مقدم الخدمة لعرض جلسات المستشار اليومية وحالة التحضير والإجراء التالي.">
+  <title>جدول مقدم الخدمة | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/provider-schedule.css">
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/provider-schedule.js" defer></script>
+</head>
+<body class="provider-page" data-auth-guard="CONSULTANT" data-auth-pending="true">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+
+  <header class="provider-header">
+    <div class="provider-shell provider-header-inner">
+      <a class="brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path>
+            <path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path>
+            <path d="M18 27h12"></path>
+            <path d="M24 14v16"></path>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>مركز الاستشارات التقنية</strong>
+          <span lang="en" dir="ltr">Technical Consultation Center</span>
+        </span>
+      </a>
+
+      <nav class="provider-nav" aria-label="تنقل مساحة المستشار">
+        <a href="/provider/schedule/" aria-current="page">جدولي</a>
+        <a href="/services/">دليل الخدمات</a>
+        <a href="/">الموقع العام</a>
+      </nav>
+
+      <div class="provider-account">
+        <span class="provider-avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1-5 4-7 8-7s7 2 8 7"></path></svg>
+        </span>
+        <span class="provider-account-copy">
+          <strong data-auth-display-name>المستشار أحمد س.</strong>
+          <span data-auth-role-label>مستشار تقني</span>
+        </span>
+        <button class="provider-logout" type="button" data-auth-logout>تسجيل الخروج</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="provider-main" id="main-content">
+    <div class="provider-shell">
+      <section class="schedule-heading" aria-labelledby="schedule-title">
+        <div>
+          <p class="eyebrow">مساحة مقدم الخدمة</p>
+          <h1 id="schedule-title">جدولي اليوم</h1>
+          <p>راجع جلساتك، حالة التحضير، وما يحتاج إلى انتباه قبل الإجراء التالي.</p>
+        </div>
+        <div class="timezone-badge">
+          <span>المنطقة الزمنية</span>
+          <strong lang="en" dir="ltr">Asia/Aden</strong>
+        </div>
+      </section>
+
+      <section class="date-toolbar" aria-label="التنقل بين أيام الجدول">
+        <div class="date-toolbar-nav">
+          <button type="button" id="previous-date" aria-label="عرض اليوم السابق">→ اليوم السابق</button>
+          <button type="button" id="next-date" aria-label="عرض اليوم التالي">اليوم التالي ←</button>
+        </div>
+        <div class="date-context" aria-live="polite">
+          <strong id="selected-date-label"></strong>
+          <span id="selected-date-sub-label"></span>
+        </div>
+        <button class="today-button" type="button" id="today-date">العودة إلى اليوم</button>
+      </section>
+
+      <div class="schedule-layout">
+        <section class="agenda-panel" aria-labelledby="agenda-title">
+          <header class="panel-heading">
+            <div>
+              <h2 id="agenda-title">جدول الجلسات</h2>
+              <p>اختر أي جلسة لمراجعة تفاصيلها وحالة التحضير.</p>
+            </div>
+            <span class="agenda-count" id="agenda-count"></span>
+          </header>
+          <ol class="agenda-list" id="agenda-list" aria-label="الجلسات المجدولة"></ol>
+          <div class="agenda-empty" id="agenda-empty" role="status" hidden>لا توجد جلسات مجدولة لهذا اليوم.</div>
+        </section>
+
+        <aside class="session-panel" id="session-panel" aria-labelledby="detail-service" tabindex="-1">
+          <section class="session-hero">
+            <div class="session-kicker-row">
+              <p class="session-kicker" id="detail-kicker">الجلسة التالية</p>
+              <span class="next-window" id="next-window"></span>
+            </div>
+            <h2 id="detail-service"></h2>
+            <p class="session-customer">العميل: <strong id="detail-customer"></strong></p>
+          </section>
+
+          <dl class="session-facts" aria-label="تفاصيل الجلسة المحددة">
+            <div><dt>التاريخ</dt><dd id="detail-date"></dd></div>
+            <div><dt>الوقت والمدة</dt><dd id="detail-time"></dd></div>
+            <div><dt>طريقة الجلسة</dt><dd id="detail-mode"></dd></div>
+            <div><dt>السياق المكاني</dt><dd id="detail-context"></dd></div>
+            <div><dt>الحالة التشغيلية</dt><dd><span class="status-badge status-upcoming" id="detail-status">قادمة</span></dd></div>
+            <div><dt>التوقيت</dt><dd><span lang="en" dir="ltr">Asia/Aden</span></dd></div>
+          </dl>
+
+          <section class="preparation-section" aria-labelledby="preparation-title">
+            <div class="preparation-heading">
+              <h3 id="preparation-title">حالة التحضير</h3>
+              <span class="preparation-progress" id="preparation-progress"></span>
+            </div>
+            <div class="preparation-bar" aria-hidden="true"><span id="preparation-bar-value"></span></div>
+            <ul class="preparation-list" id="preparation-list"></ul>
+          </section>
+
+          <section class="attention-section" id="attention-section" aria-labelledby="attention-title">
+            <h3 id="attention-title">يحتاج انتباهك</h3>
+            <p id="attention-text"></p>
+          </section>
+
+          <div class="session-actions">
+            <button class="button button-primary session-primary-action" id="session-primary-action" type="button">مراجعة التحضير</button>
+            <p class="session-action-note" id="session-action-note"></p>
+          </div>
+
+          <p class="session-open-note" id="session-open-note" role="status" tabindex="-1" hidden>
+            تم فتح سياق الجلسة. يمكنك الآن مراجعة تفاصيلها وحالة التحضير من هذه المساحة.
+          </p>
+        </aside>
+      </div>
+
+      <p class="provider-announcer" id="provider-announcer" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </main>
+
+  <footer class="provider-footer">
+    <div class="provider-shell provider-footer-inner">
+      <p>© 2026 مركز الاستشارات التقنية. جميع الحقوق محفوظة.</p>
+      <p><span lang="en" dir="ltr">Asia/Aden</span> — توقيت الجدول</p>
+    </div>
+  </footer>
+</body>
+</html>
