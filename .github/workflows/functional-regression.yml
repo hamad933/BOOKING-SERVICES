@@ -1,0 +1,82 @@
+name: RP03 Functional Regression
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  functional-regression:
+    name: Exercise S01-S12 browser interactions
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'chore/rp03-integration-hardening'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run focused interactive regression for every real surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$CHROME" ]]; then
+            echo "A Chromium-compatible browser is required." >&2
+            exit 1
+          fi
+
+          EVIDENCE="$RUNNER_TEMP/rp03-functional-regression"
+          mkdir -p "$EVIDENCE"
+          : > "$EVIDENCE/results.txt"
+          : > "$EVIDENCE/browser-console.log"
+
+          python3 -m http.server 8767 --bind 127.0.0.1 >"$EVIDENCE/http-server.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 1
+
+          for surface in S01 S02 S03 S04 S05 S06 S07 S08 S09 S10 S11 S12; do
+            PROFILE="$(mktemp -d)"
+            DUMP="$EVIDENCE/${surface}.html"
+            timeout 60 "$CHROME" \
+              --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+              --window-size=1440,1000 --virtual-time-budget=18000 \
+              --user-data-dir="$PROFILE" --dump-dom \
+              "http://127.0.0.1:8767/.github/qa/rp03-functional-harness.html?surface=${surface}" \
+              >"$DUMP" 2>>"$EVIDENCE/browser-console.log"
+            rm -rf "$PROFILE"
+
+            if ! grep -Fq 'data-result="PASS"' "$DUMP"; then
+              echo "FUNCTIONAL FAIL ${surface}" >&2
+              sed -n '/id="qa-result"/,$p' "$DUMP" >&2 || cat "$DUMP" >&2
+              exit 1
+            fi
+
+            RESULT="$(sed -n 's/.*<pre id="qa-result">\(.*\)<\/pre>.*/\1/p' "$DUMP" | sed 's/&quot;/"/g;s/&amp;/\&/g;s/&lt;/</g;s/&gt;/>/g')"
+            echo "PASS ${surface} ${RESULT}" | tee -a "$EVIDENCE/results.txt"
+          done
+
+          if grep -Eiq 'ERROR:CONSOLE.*(Uncaught|SyntaxError|ReferenceError|TypeError)|Uncaught (SyntaxError|ReferenceError|TypeError)' "$EVIDENCE/browser-console.log"; then
+            echo "Runtime JavaScript error found during functional regression." >&2
+            grep -Ei 'ERROR:CONSOLE.*(Uncaught|SyntaxError|ReferenceError|TypeError)|Uncaught (SyntaxError|ReferenceError|TypeError)' "$EVIDENCE/browser-console.log" >&2
+            exit 1
+          fi
+
+          echo "ALL S01-S12 INTERACTIVE REGRESSIONS PASS"
+
+      - name: Upload functional regression evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp03-functional-regression-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/rp03-functional-regression/results.txt
+            ${{ runner.temp }}/rp03-functional-regression/browser-console.log
+          if-no-files-found: error
+          retention-days: 14
