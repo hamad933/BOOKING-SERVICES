@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="مساحة المسؤول لإدارة نسخة محلية اصطناعية من سجلات كتالوج خدمات مركز الاستشارات التقنية.">
+  <title>إدارة الخدمات | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/admin.css">
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/admin-state.js" defer></script>
+  <script src="/assets/js/admin-services.js" defer></script>
+</head>
+<body class="admin-page" data-auth-guard="ADMIN" data-auth-pending="true">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+  <div class="admin-protected">
+    <header class="admin-topbar">
+      <a class="admin-brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية">
+        <span class="admin-brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path><path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path><path d="M18 27h12"></path><path d="M24 14v16"></path></svg></span>
+        <span class="admin-brand-copy"><strong>مركز الاستشارات التقنية</strong><span lang="en" dir="ltr">Technical Consultation Center</span></span>
+      </a>
+      <div class="admin-top-context">إدارة السجلات المحلية — نسخة تطبيقية غير إنتاجية</div>
+      <div class="admin-account"><span class="admin-account-copy"><strong data-auth-display-name>مسؤول النظام التجريبي</strong><span data-auth-role-label>مسؤول</span></span><button class="admin-logout" type="button" data-auth-logout>تسجيل الخروج</button></div>
+    </header>
+
+    <div class="admin-layout">
+      <aside class="admin-sidebar" aria-label="تنقل الإدارة">
+        <nav class="admin-nav">
+          <a href="/admin/services/" aria-current="page">إدارة الخدمات</a>
+          <a href="/admin/providers-resources/">المستشارون والموارد</a>
+          <a href="/admin/availability-exceptions/">التوفر والاستثناءات</a>
+        </nav>
+        <div class="admin-side-boundary"><strong>نطاق الإدارة الحالي</strong>العمليات هنا محلية داخل جلسة المتصفح. لا توجد قاعدة بيانات أو واجهة API أو مزامنة إنتاجية.</div>
+      </aside>
+
+      <div>
+        <main class="admin-main" id="main-content">
+          <div class="admin-shell">
+            <section class="admin-page-heading" aria-labelledby="services-admin-title">
+              <div><p class="admin-eyebrow">إدارة كتالوج الخدمات</p><h1 id="services-admin-title">خدمات الاستشارة</h1><p>راجع سجلات الخدمات، حالتها، الفئة، المدة، طرق الجلسة ومتطلبات التحضير، ثم عدّل النسخة المحلية المحددة دون تغيير الكتالوج العام.</p></div>
+              <div class="admin-heading-actions"><button class="admin-button admin-button-primary" id="service-add" type="button">إضافة خدمة اصطناعية</button></div>
+            </section>
+
+            <div class="admin-local-banner"><div><strong>حدود الحقيقة:</strong> هذه مساحة إدارة متعمدة محليًا. التغييرات محفوظة في <span lang="en" dir="ltr">sessionStorage</span> لهذه الجلسة فقط ولا تعيد كتابة كتالوج S02 العام.</div><span class="admin-local-token">rp03.admin.operations.v1</span></div>
+
+            <section class="admin-panel admin-toolbar" aria-label="البحث والتصفية">
+              <div class="admin-filter-grid">
+                <div class="admin-field"><label for="service-search">البحث في الخدمات</label><input class="admin-input" id="service-search" type="search" autocomplete="off" placeholder="اسم الخدمة، الوصف أو الفئة"></div>
+                <div class="admin-field"><label for="service-category-filter">الفئة</label><select class="admin-select" id="service-category-filter"><option value="ALL">كل الفئات</option></select></div>
+                <div class="admin-field"><label for="service-mode-filter">طريقة الجلسة</label><select class="admin-select" id="service-mode-filter"><option value="ALL">كل الطرق</option><option value="حضوري">حضوري</option><option value="عن بُعد">عن بُعد</option></select></div>
+                <div class="admin-field"><label for="service-status-filter">حالة السجل</label><select class="admin-select" id="service-status-filter"><option value="ALL">كل الحالات</option><option value="ACTIVE">نشط</option><option value="INACTIVE">غير نشط</option></select></div>
+                <button class="admin-button" id="service-reset" type="button">إعادة ضبط</button>
+              </div>
+            </section>
+
+            <div class="admin-workspace admin-workspace-wide">
+              <section class="admin-panel admin-list-panel" aria-labelledby="service-list-title">
+                <div class="admin-result-summary"><h2 id="service-list-title">سجلات الخدمات</h2><span class="admin-result-count" id="service-result-count" role="status" aria-live="polite"></span></div>
+                <div class="admin-table-wrap" id="service-table-wrap"><table class="admin-table" aria-describedby="service-result-count"><thead><tr><th>الخدمة</th><th>الفئة</th><th>المدة</th><th>طرق الجلسة</th><th>التحضير</th><th>الحالة</th></tr></thead><tbody id="service-table-body"></tbody></table></div>
+                <div class="admin-empty" id="service-empty" role="status" hidden><strong>لا توجد خدمات مطابقة.</strong><p>غيّر البحث أو الفلاتر، أو أعد ضبطها لاستعراض السجلات المحلية المتاحة.</p></div>
+              </section>
+
+              <aside class="admin-panel admin-detail-panel" id="service-detail" tabindex="-1" aria-labelledby="service-detail-title">
+                <header class="admin-detail-head"><p class="admin-detail-kicker" id="service-detail-kicker">الخدمة المحددة</p><h2 id="service-detail-title">اختر خدمة من القائمة</h2><p id="service-detail-subtitle">ستظهر حقول النسخة المحلية هنا.</p></header>
+                <form class="admin-form" id="service-form" novalidate>
+                  <input id="service-id" type="hidden">
+                  <div class="admin-form-grid">
+                    <div class="admin-field admin-field-full"><label for="service-title">اسم الخدمة</label><input class="admin-input" id="service-title" required aria-describedby="service-form-error"></div>
+                    <div class="admin-field admin-field-full"><label for="service-description">الوصف المختصر</label><textarea class="admin-textarea" id="service-description" required aria-describedby="service-form-error"></textarea></div>
+                    <div class="admin-field"><label for="service-category">الفئة</label><select class="admin-select" id="service-category" required aria-describedby="service-form-error"><option value="">اختر الفئة</option><option>تشخيص وحل المشكلات</option><option>مراجعة وتقييم</option><option>تخطيط وقرارات</option><option>تحديد الاحتياج</option></select></div>
+                    <div class="admin-field"><label for="service-duration">مدة الجلسة</label><select class="admin-select" id="service-duration" required aria-describedby="service-form-error"><option value="">اختر المدة</option><option value="60–90 دقيقة">60–90 دقيقة</option><option value="90–120 دقيقة">90–120 دقيقة</option></select></div>
+                    <fieldset class="admin-field admin-field-full" style="border:0;padding:0;margin:0"><legend>طرق الجلسة</legend><div class="admin-checkboxes"><label class="admin-check"><input id="service-mode-inperson" type="checkbox" value="حضوري"> حضوري</label><label class="admin-check"><input id="service-mode-remote" type="checkbox" value="عن بُعد"> عن بُعد</label></div></fieldset>
+                    <div class="admin-field admin-field-full"><label class="admin-check"><input id="service-preparation-required" type="checkbox"> يتطلب تحضيرًا قبل الجلسة</label></div>
+                    <div class="admin-field admin-field-full"><label for="service-preparation-summary">ملخص التحضير</label><textarea class="admin-textarea" id="service-preparation-summary" aria-describedby="service-form-error"></textarea></div>
+                    <div class="admin-field admin-field-full"><label class="admin-check"><input id="service-active" type="checkbox"> السجل المحلي نشط</label></div>
+                  </div>
+                  <p class="admin-error" id="service-form-error" role="alert" hidden></p>
+                  <p class="admin-form-note"><strong>ملكية S10:</strong> إدارة الوصف والحالة المحلية لكتالوج الخدمات فقط. السعر، الدفع، إسناد المستشار أو المورد، والتوفر الحي ليست ضمن هذا السطح.</p>
+                  <div class="admin-form-actions"><button class="admin-button admin-button-primary" id="service-save" type="submit" disabled>حفظ النسخة المحلية</button><button class="admin-button" id="service-cancel" type="button" disabled>إلغاء</button></div>
+                </form>
+              </aside>
+            </div>
+          </div>
+        </main>
+        <footer class="admin-footer"><div class="admin-footer-inner"><span>© 2026 مركز الاستشارات التقنية — سجلات إدارية اصطناعية محلية.</span><span lang="en" dir="ltr">ADMIN / S10</span></div></footer>
+      </div>
+    </div>
+    <p class="admin-announcer" id="service-announcer" role="status" aria-live="polite" aria-atomic="true"></p>
+  </div>
+</body>
+</html>
