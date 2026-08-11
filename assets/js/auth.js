@@ -21,7 +21,7 @@
 
   const ROLE_DESTINATIONS = Object.freeze({
     AUTHENTICATED_CUSTOMER: "/",
-    ADMIN: "/",
+    ADMIN: "/admin/services/",
     CONSULTANT: "/provider/schedule/",
     FRONT_DESK: "/operations/bookings/"
   });
@@ -100,6 +100,13 @@
     }
     if (path === "/resources/schedule/" || path.startsWith("/resources/schedule/?")) {
       return [ROLES.CONSULTANT, ROLES.ADMIN];
+    }
+    if (
+      path === "/admin/services/" || path.startsWith("/admin/services/?") ||
+      path === "/admin/providers-resources/" || path.startsWith("/admin/providers-resources/?") ||
+      path === "/admin/availability-exceptions/" || path.startsWith("/admin/availability-exceptions/?")
+    ) {
+      return [ROLES.ADMIN];
     }
     return null;
   };
@@ -256,6 +263,7 @@
     if (session) {
       roleNode.textContent = roleLabel(session.role);
       const labels = {
+        ADMIN: "العودة إلى إدارة الخدمات",
         CONSULTANT: "العودة إلى جدولي",
         FRONT_DESK: "العودة إلى إدارة الحجوزات"
       };
