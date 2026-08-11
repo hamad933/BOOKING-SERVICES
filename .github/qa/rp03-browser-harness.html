@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RP03 QA harness</title>
+  <style>
+    html,body{margin:0;min-height:100%;font-family:system-ui,sans-serif}iframe{display:block;width:100vw;height:900px;border:0}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px}
+  </style>
+</head>
+<body data-result="PENDING">
+<script>
+(() => {
+  "use strict";
+
+  const params = new URLSearchParams(window.location.search);
+  const role = params.get("role");
+  const target = params.get("target") || "/";
+  const mode = params.get("mode") || "redirect";
+  const validRoles = new Set(["AUTHENTICATED_CUSTOMER", "CONSULTANT", "FRONT_DESK", "ADMIN"]);
+  const displayNames = {
+    AUTHENTICATED_CUSTOMER: "عميل تجريبي",
+    CONSULTANT: "المستشار أحمد س.",
+    FRONT_DESK: "موظف الاستقبال التجريبي",
+    ADMIN: "مسؤول النظام التجريبي"
+  };
+
+  sessionStorage.clear();
+  if (validRoles.has(role)) {
+    sessionStorage.setItem("rp03.auth.session.v1", JSON.stringify({
+      role,
+      displayName: displayNames[role],
+      source: "rp03-hardening-evidence-harness",
+      createdAt: new Date().toISOString()
+    }));
+  }
+
+  if (mode !== "probe") {
+    window.location.replace(target);
+    return;
+  }
+
+  const frame = document.createElement("iframe");
+  frame.title = "RP03 responsive QA probe";
+  frame.src = target;
+  document.body.append(frame);
+
+  const finish = (result) => {
+    document.body.dataset.result = result.pass ? "PASS" : "FAIL";
+    const output = document.createElement("pre");
+    output.id = "qa-result";
+    output.textContent = JSON.stringify(result);
+    document.body.replaceChildren(output);
+  };
+
+  frame.addEventListener("load", () => {
+    window.setTimeout(() => {
+      try {
+        const doc = frame.contentDocument;
+        const root = doc.documentElement;
+        const path = `${frame.contentWindow.location.pathname}${frame.contentWindow.location.search}`;
+        const horizontalOverflow = root.scrollWidth > root.clientWidth + 1;
+        const runtimeGuardPending = doc.body?.dataset.authPending === "true";
+        finish({
+          pass: !horizontalOverflow && !runtimeGuardPending,
+          target,
+          path,
+          clientWidth: root.clientWidth,
+          scrollWidth: root.scrollWidth,
+          horizontalOverflow,
+          runtimeGuardPending
+        });
+      } catch (error) {
+        finish({ pass: false, target, error: String(error) });
+      }
+    }, 700);
+  });
+})();
+</script>
+</body>
+</html>
