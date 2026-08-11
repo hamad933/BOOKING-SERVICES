@@ -49,10 +49,10 @@
     const search=doc.querySelector("#service-search-input"); assert(search,"S02 search missing");
     search.value="__rp03_no_match__"; event(search,"input"); await sleep(60);
     assert(visible(doc.querySelector("#catalog-empty")), "S02 no-results state did not appear");
-    doc.querySelector("#filter-reset").click(); await sleep(60);
-    assert(!visible(doc.querySelector("#catalog-empty")), "S02 reset did not clear no-results state");
+    doc.querySelector("#empty-reset").click(); await sleep(60);
+    assert(!visible(doc.querySelector("#catalog-empty")), "S02 clear-all reset did not clear no-results state");
     assert([...doc.querySelectorAll(".catalog-service")].filter((item)=>!item.hidden).length === 6, "S02 reset did not restore six services");
-    return "search, no-results, and reset are functional";
+    return "search, no-results, and full reset are functional";
   };
 
   const testS03 = async (win, doc) => {
