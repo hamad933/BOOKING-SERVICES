@@ -1,0 +1,48 @@
+name: RP03 Temporary Admin Visual Alignment Patch
+
+on:
+  push:
+    branches:
+      - chore/rp03-integration-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: chore/rp03-integration-hardening
+          fetch-depth: 0
+
+      - name: Apply exact visual-order correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('assets/css/admin.css')
+          text = path.read_text(encoding='utf-8')
+          old = '.admin-workspace { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(330px, .82fr); gap: 16px; align-items: start; }\n.admin-workspace-wide { grid-template-columns: minmax(0, 1.6fr) minmax(360px, .86fr); }'
+          new = '.admin-workspace { direction: ltr; display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(330px, .82fr); gap: 16px; align-items: start; }\n.admin-workspace > * { direction: rtl; }\n.admin-workspace-wide { grid-template-columns: minmax(0, 1.6fr) minmax(360px, .86fr); }'
+          if new in text:
+              raise SystemExit(0)
+          if old not in text:
+              raise SystemExit('Expected admin workspace rule was not found; refusing broad mutation.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- assets/css/admin.css
+          if git diff --quiet -- assets/css/admin.css; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/css/admin.css
+          git commit -m 'fix: align admin workspace with approved RTL references'
+          git push origin HEAD:chore/rp03-integration-hardening
