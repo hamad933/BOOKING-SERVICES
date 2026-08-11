@@ -209,8 +209,7 @@
   const attendanceState = (sessionItem) => {
     if (["CHECKED_IN", "IN_PROGRESS", "COMPLETED", "NO_SHOW"].includes(sessionItem.baseState)) return sessionItem.baseState;
     const elapsed = elapsedMinutesSinceStart(sessionItem);
-    if (elapsed >= 0 && elapsed < 15) return "LATE";
-    return "UPCOMING";
+    return elapsed < 0 ? "UPCOMING" : "LATE";
   };
 
   const noShowEligible = (sessionItem) => {
