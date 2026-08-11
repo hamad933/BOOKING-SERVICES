@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="حالة وصول غير مصرح بها لمساحة محمية في تطبيق مركز الاستشارات التقنية.">
+  <title>غير مصرح بالوصول | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/auth.css">
+  <script src="/assets/js/auth.js" defer></script>
+</head>
+<body class="auth-page">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+
+  <header class="auth-header">
+    <div class="auth-shell auth-header-inner">
+      <a class="brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path>
+            <path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path>
+            <path d="M18 27h12"></path>
+            <path d="M24 14v16"></path>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>مركز الاستشارات التقنية</strong>
+          <span lang="en" dir="ltr">Technical Consultation Center</span>
+        </span>
+      </a>
+      <a class="auth-home-link" href="/">الرئيسية</a>
+    </div>
+  </header>
+
+  <main class="unauthorized-main" id="main-content" data-auth-unauthorized>
+    <div class="auth-shell">
+      <section class="unauthorized-card" aria-labelledby="unauthorized-title">
+        <span class="unauthorized-icon" aria-hidden="true">!</span>
+        <p class="eyebrow">وصول محمي</p>
+        <h1 id="unauthorized-title">هذا الدور لا يملك صلاحية لهذه المساحة</h1>
+        <p>تم التعرف على الجلسة الحالية، لكن مساحة جدول مقدم الخدمة مخصصة لدور المستشار. يمكنك العودة إلى المساحة المناسبة لدورك أو تسجيل الخروج واختيار جلسة تجريبية أخرى.</p>
+        <div class="unauthorized-role">الدور الحالي: <strong data-current-role></strong></div>
+        <div class="unauthorized-actions">
+          <a class="button button-primary" data-unauthorized-primary href="/">العودة إلى الصفحة الرئيسية</a>
+          <button class="button button-secondary" type="button" data-auth-logout>تسجيل الخروج</button>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
