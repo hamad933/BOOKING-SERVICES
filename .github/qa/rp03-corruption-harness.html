@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>RP03 corruption probe</title></head>
+<body data-result="PENDING">
+<script>
+(() => {
+  "use strict";
+  const params = new URLSearchParams(location.search);
+  const surface = params.get("surface") || "";
+  const configs = {
+    auth: { key:"rp03.auth.session.v1", role:null, target:"/provider/schedule/", expected:"/login/" },
+    s05: { key:"rp03.s05.booking.v1", role:null, target:"/book/technical-review/", expected:"/book/technical-review/" },
+    s06: { key:"rp03.s06.schedule.v1", role:"CONSULTANT", target:"/provider/schedule/", expected:"/provider/schedule/" },
+    s07: { key:"rp03.s07.resource.schedule.v1", role:"CONSULTANT", target:"/resources/schedule/", expected:"/resources/schedule/" },
+    frontdesk: { key:"rp03.frontdesk.operations.v1", role:"FRONT_DESK", target:"/operations/bookings/", expected:"/operations/bookings/" },
+    admin: { key:"rp03.admin.operations.v1", role:"ADMIN", target:"/admin/services/", expected:"/admin/services/" }
+  };
+  const config = configs[surface];
+  const finish = (result) => {
+    document.body.dataset.result = result.pass ? "PASS" : "FAIL";
+    const pre = document.createElement("pre");
+    pre.id = "qa-result";
+    pre.textContent = JSON.stringify(result);
+    document.body.replaceChildren(pre);
+  };
+  if (!config) { finish({pass:false,surface,error:"Unknown surface"}); return; }
+
+  sessionStorage.clear();
+  if (config.role) {
+    sessionStorage.setItem("rp03.auth.session.v1", JSON.stringify({role:config.role,displayName:"QA",source:"corruption-harness",createdAt:new Date().toISOString()}));
+  }
+  sessionStorage.setItem(config.key, "{malformed-json");
+
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "width:100%;height:900px;border:0";
+  frame.src = config.target;
+  document.body.append(frame);
+  frame.addEventListener("load", () => setTimeout(() => {
+    try {
+      const path = frame.contentWindow.location.pathname;
+      const doc = frame.contentDocument;
+      const guardPending = doc.body?.dataset.authPending === "true";
+      const hasMainContent = Boolean(doc.querySelector("h1, main"));
+      finish({pass:path===config.expected && !guardPending && hasMainContent,surface,path,expected:config.expected,guardPending,hasMainContent});
+    } catch (error) {
+      finish({pass:false,surface,error:String(error)});
+    }
+  }, 900));
+})();
+</script>
+</body>
+</html>
