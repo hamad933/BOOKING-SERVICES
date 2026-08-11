@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="مساحة موظف الاستقبال لإدارة الحجوزات والتحضير وسياق التحقق المحايد من ارتباط الضيف بالحجز.">
+  <title>إدارة الحجوزات | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/frontdesk.css">
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/operations-state.js" defer></script>
+  <script src="/assets/js/frontdesk-bookings.js" defer></script>
+</head>
+<body class="fd-page" data-auth-guard="FRONT_DESK" data-auth-pending="true">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+
+  <header class="fd-header">
+    <div class="fd-shell fd-header-inner">
+      <a class="fd-brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية">
+        <span class="fd-brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path><path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path><path d="M18 27h12"></path><path d="M24 14v16"></path></svg></span>
+        <span class="fd-brand-copy"><strong>مركز الاستشارات التقنية</strong><span lang="en" dir="ltr">Technical Consultation Center</span></span>
+      </a>
+      <nav class="fd-nav" aria-label="تنقل مساحة الاستقبال">
+        <a href="/operations/bookings/" aria-current="page">إدارة الحجوزات</a>
+        <a href="/operations/attendance/">الحضور وتقدم الجلسات</a>
+      </nav>
+      <div class="fd-account">
+        <span class="fd-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1-5 4-7 8-7s7 2 8 7"></path></svg></span>
+        <span class="fd-account-copy"><strong data-auth-display-name>موظف الاستقبال التجريبي</strong><span data-auth-role-label>موظف الاستقبال</span></span>
+        <button class="fd-logout" type="button" data-auth-logout>تسجيل الخروج</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="fd-main" id="main-content">
+    <div class="fd-shell">
+      <section class="fd-page-heading" aria-labelledby="bookings-title">
+        <div>
+          <p class="eyebrow">مساحة الاستقبال التشغيلية</p>
+          <h1 id="bookings-title">إدارة الحجوزات والتحقق</h1>
+          <p>راجع الحجوزات القادمة، حالة التحضير، وسياق ربط الضيف بالحجز دون افتراض آلية إثبات تقنية غير معتمدة.</p>
+        </div>
+        <div class="fd-meta-row">
+          <span class="fd-meta-badge">المنطقة الزمنية <strong lang="en" dir="ltr">Asia/Aden</strong></span>
+          <span class="fd-meta-badge" id="bookings-date-badge"></span>
+        </div>
+      </section>
+
+      <div class="fd-workspace">
+        <section class="fd-panel fd-list-panel" aria-labelledby="booking-list-title">
+          <div class="fd-search-area">
+            <div class="fd-search-row">
+              <div class="fd-field">
+                <label for="booking-search">البحث في الحجوزات</label>
+                <input class="fd-search-input" id="booking-search" type="search" placeholder="رقم الحجز، اسم الضيف، البريد أو وسيلة التواصل" autocomplete="off">
+              </div>
+              <button class="fd-reset" id="booking-reset" type="button">إعادة ضبط</button>
+            </div>
+            <div class="fd-filter-grid" aria-label="فلاتر الحجوزات">
+              <div class="fd-field"><label for="booking-state-filter">حالة الحجز</label><select class="fd-filter-select" id="booking-state-filter"><option value="ALL">كل الحالات</option><option value="CONFIRMED">مؤكد</option><option value="PENDING_REVIEW">بانتظار المراجعة</option><option value="CANCELLED">ملغى</option></select></div>
+              <div class="fd-field"><label for="preparation-state-filter">حالة التحضير</label><select class="fd-filter-select" id="preparation-state-filter"><option value="ALL">كل حالات التحضير</option><option value="READY">جاهز</option><option value="PENDING_REVIEW">بانتظار المراجعة</option><option value="FOLLOW_UP_REQUIRED">يتطلب متابعة</option><option value="NOT_REQUIRED">غير مطلوب</option></select></div>
+              <div class="fd-field"><label for="proof-state-filter">حالة ربط الضيف</label><select class="fd-filter-select" id="proof-state-filter"><option value="ALL">كل حالات الربط</option><option value="PENDING">قيد المراجعة</option><option value="VERIFIED">تمت المراجعة</option><option value="FOLLOW_UP_REQUIRED">يتطلب متابعة</option></select></div>
+              <div class="fd-meta-badge" aria-label="نوع البيانات">بيانات تشغيلية اصطناعية</div>
+            </div>
+          </div>
+
+          <div class="fd-result-summary"><h2 id="booking-list-title" style="margin:0;font-size:.82rem;color:#08295a">قائمة الحجوزات</h2><span id="booking-result-count" role="status" aria-live="polite"></span></div>
+
+          <div class="fd-table-wrap" id="booking-table-wrap">
+            <table class="fd-table" aria-describedby="booking-result-count">
+              <thead><tr><th style="width:15%">رقم الحجز</th><th style="width:18%">الضيف</th><th style="width:23%">الخدمة</th><th style="width:14%">التاريخ والوقت</th><th style="width:10%">الحجز</th><th style="width:10%">التحضير</th><th style="width:10%">ربط الضيف</th></tr></thead>
+              <tbody id="booking-table-body"></tbody>
+            </table>
+          </div>
+          <div class="fd-empty" id="booking-empty" role="status" hidden><strong>لا توجد نتائج مطابقة.</strong><p>غيّر عبارة البحث أو الفلاتر، أو أعد ضبطها لعرض السجلات الاصطناعية المتاحة.</p></div>
+        </section>
+
+        <aside class="fd-panel fd-detail-panel" id="booking-detail" tabindex="-1" aria-labelledby="booking-detail-title">
+          <header class="fd-detail-header"><p class="fd-detail-kicker">الحجز المحدد</p><h2 id="booking-detail-title">اختر حجزًا من القائمة</h2><p id="booking-detail-subtitle">ستظهر هنا معلومات الضيف والجلسة وسياق التحضير وربط الضيف.</p></header>
+          <section class="fd-detail-section"><h3>تفاصيل الحجز</h3><dl class="fd-detail-grid"><div><dt>رقم الحجز</dt><dd id="detail-booking-id" dir="ltr">—</dd></div><div><dt>حالة الحجز</dt><dd id="detail-booking-state">—</dd></div><div><dt>الضيف</dt><dd id="detail-guest">—</dd></div><div><dt>وسيلة التواصل</dt><dd id="detail-contact" dir="ltr">—</dd></div><div><dt>الخدمة</dt><dd id="detail-service">—</dd></div><div><dt>التاريخ والوقت</dt><dd id="detail-date-time">—</dd></div><div><dt>المستشار</dt><dd id="detail-consultant">—</dd></div><div><dt>الغرفة / السياق</dt><dd id="detail-room">—</dd></div></dl></section>
+          <section class="fd-detail-section"><h3>التحضير وربط الضيف</h3><div class="fd-control-grid"><div class="fd-field"><label for="detail-preparation-select">حالة التحضير</label><select class="fd-filter-select" id="detail-preparation-select"><option value="READY">جاهز</option><option value="PENDING_REVIEW">بانتظار المراجعة</option><option value="FOLLOW_UP_REQUIRED">يتطلب متابعة</option><option value="NOT_REQUIRED">غير مطلوب</option></select></div><div class="fd-field"><label for="detail-proof-select">حالة ربط الضيف</label><select class="fd-filter-select" id="detail-proof-select"><option value="PENDING">قيد المراجعة</option><option value="VERIFIED">تمت المراجعة</option><option value="FOLLOW_UP_REQUIRED">يتطلب متابعة</option></select></div></div><p class="fd-boundary-note">تعني حالة «تمت المراجعة» أن معلومات الحجز/التواصل المقدمة روجعت ضمن العرض المحلي فقط. لا يحدد هذا السطح OTP أو SMS أو رابط بريد أو حسابًا دائمًا أو وثيقة هوية أو إثبات دفع.</p></section>
+          <section class="fd-detail-section"><h3>الإجراء التالي</h3><button class="fd-primary-button" id="open-attendance" type="button" disabled>فتح سياق الحضور</button><p class="fd-action-note" id="booking-action-note">اختر حجزًا صالحًا للمتابعة.</p></section>
+        </aside>
+      </div>
+      <p class="fd-announcer" id="booking-announcer" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </main>
+
+  <footer class="fd-footer"><div class="fd-shell fd-footer-inner"><p>© 2026 مركز الاستشارات التقنية. سجلات العرض اصطناعية ومحلية.</p><p><span lang="en" dir="ltr">FRONT_DESK</span> — صلاحية تشغيلية مستقلة</p></div></footer>
+</body>
+</html>

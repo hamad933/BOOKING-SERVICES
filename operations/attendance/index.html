@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="مساحة موظف الاستقبال لتسجيل الوصول والحضور وتقدم الجلسات والإكمال والمتابعة.">
+  <title>الحضور وتقدم الجلسات | مركز الاستشارات التقنية</title>
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/frontdesk.css">
+  <script src="/assets/js/auth.js" defer></script>
+  <script src="/assets/js/operations-state.js" defer></script>
+  <script src="/assets/js/frontdesk-attendance.js" defer></script>
+</head>
+<body class="fd-page" data-auth-guard="FRONT_DESK" data-auth-pending="true">
+  <a class="skip-link" href="#main-content">انتقل إلى المحتوى الرئيسي</a>
+  <header class="fd-header">
+    <div class="fd-shell fd-header-inner">
+      <a class="fd-brand" href="/" aria-label="مركز الاستشارات التقنية — الصفحة الرئيسية"><span class="fd-brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 3 39 12v18L24 45 9 30V12L24 3Z"></path><path d="M16 30c2-7 5-12 8-16 3 4 6 9 8 16"></path><path d="M18 27h12"></path><path d="M24 14v16"></path></svg></span><span class="fd-brand-copy"><strong>مركز الاستشارات التقنية</strong><span lang="en" dir="ltr">Technical Consultation Center</span></span></a>
+      <nav class="fd-nav" aria-label="تنقل مساحة الاستقبال"><a href="/operations/bookings/">إدارة الحجوزات</a><a href="/operations/attendance/" aria-current="page">الحضور وتقدم الجلسات</a></nav>
+      <div class="fd-account"><span class="fd-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1-5 4-7 8-7s7 2 8 7"></path></svg></span><span class="fd-account-copy"><strong data-auth-display-name>موظف الاستقبال التجريبي</strong><span data-auth-role-label>موظف الاستقبال</span></span><button class="fd-logout" type="button" data-auth-logout>تسجيل الخروج</button></div>
+    </div>
+  </header>
+
+  <main class="fd-main" id="main-content">
+    <div class="fd-shell">
+      <section class="fd-page-heading" aria-labelledby="attendance-title"><div><p class="eyebrow">مساحة الاستقبال التشغيلية</p><h1 id="attendance-title">الحضور وتقدم الجلسات</h1><p>تابع الوصول والحضور وتقدم الجلسات والإكمال، مع تطبيق حدّ الغياب بعد 15 دقيقة فقط.</p></div><div class="fd-meta-row"><span class="fd-meta-badge">المنطقة الزمنية <strong lang="en" dir="ltr">Asia/Aden</strong></span><span class="fd-meta-badge" id="attendance-now"></span></div></section>
+
+      <section class="fd-date-toolbar" aria-label="التنقل بين أيام الحضور"><div class="fd-date-actions"><button id="previous-date" type="button">→ اليوم السابق</button><button id="next-date" type="button">اليوم التالي ←</button></div><div class="fd-date-context"><strong id="selected-date-label"></strong><span>سجل تشغيلي اصطناعي</span></div><button class="fd-secondary-button" id="today-date" type="button">العودة إلى اليوم</button></section>
+
+      <div class="fd-counts" id="attendance-counts" aria-label="فلاتر حالة الحضور"></div>
+
+      <div class="fd-workspace">
+        <section class="fd-panel fd-list-panel" aria-labelledby="session-list-title"><div class="fd-result-summary"><h2 id="session-list-title" style="margin:0;font-size:.82rem;color:#08295a">الجلسات حسب الحالة التشغيلية</h2><span id="attendance-result-count" role="status" aria-live="polite"></span></div><div id="attendance-groups"></div><div class="fd-empty" id="attendance-empty" role="status" hidden><strong>لا توجد جلسات مطابقة لهذا الفلتر.</strong><p>اختر حالة أخرى أو عد إلى عرض كل الجلسات.</p></div></section>
+
+        <aside class="fd-panel fd-detail-panel" id="attendance-detail" tabindex="-1" aria-labelledby="attendance-detail-title">
+          <header class="fd-detail-header"><p class="fd-detail-kicker">الجلسة المحددة</p><h2 id="attendance-detail-title">اختر جلسة من القائمة</h2><p id="attendance-detail-subtitle">ستظهر هنا حالة الوصول والحضور وتقدم الجلسة.</p></header>
+          <section class="fd-detail-section"><h3>تفاصيل الجلسة</h3><dl class="fd-detail-grid"><div><dt>رقم الحجز</dt><dd id="attendance-booking-id" dir="ltr">—</dd></div><div><dt>الحالة</dt><dd id="attendance-state">—</dd></div><div><dt>الضيف</dt><dd id="attendance-guest">—</dd></div><div><dt>الوقت</dt><dd id="attendance-time" dir="ltr">—</dd></div><div><dt>الخدمة</dt><dd id="attendance-service">—</dd></div><div><dt>المستشار</dt><dd id="attendance-consultant">—</dd></div><div><dt>طريقة الجلسة</dt><dd id="attendance-mode">—</dd></div><div><dt>الغرفة / السياق</dt><dd id="attendance-room">—</dd></div></dl><div class="fd-progress-track" aria-label="تقدم الجلسة"><span class="fd-progress-step" id="progress-checkin">تسجيل الوصول</span><span class="fd-progress-step" id="progress-attendance">الحضور</span><span class="fd-progress-step" id="progress-completion">الإكمال</span></div></section>
+          <section class="fd-detail-section"><h3>الملاحظات الختامية والمتابعة</h3><div class="fd-field"><label for="final-note">ملاحظة ختامية مختصرة</label><textarea class="fd-note-input" id="final-note" maxlength="300" placeholder="أضف ملخصًا أو ملاحظة تشغيلية قصيرة عن الجلسة..."></textarea><p class="fd-note-counter" id="note-counter">0 / 300</p></div><fieldset class="fd-filter-group" style="margin-top:10px"><legend>هل المتابعة مطلوبة؟</legend><div class="fd-radio-row"><label class="fd-radio-option"><input type="radio" name="follow-up" value="yes"> نعم، متابعة مطلوبة</label><label class="fd-radio-option"><input type="radio" name="follow-up" value="no" checked> لا، غير مطلوبة</label></div></fieldset></section>
+          <section class="fd-detail-section"><h3>الإجراء التالي</h3><div class="fd-action-stack"><button class="fd-primary-button" id="attendance-primary-action" type="button" disabled>اختر جلسة</button><div class="fd-action-row"><button class="fd-secondary-action" id="mark-completed" type="button" disabled>تحديد كمكتملة</button><button class="fd-secondary-action fd-danger-action" id="mark-no-show" type="button" disabled>تحديد كلم يحضر</button></div></div><p class="fd-action-note" id="attendance-action-note">اختر جلسة لمراجعة الإجراء المتاح.</p></section>
+        </aside>
+      </div>
+      <p class="fd-announcer" id="attendance-announcer" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </main>
+  <footer class="fd-footer"><div class="fd-shell fd-footer-inner"><p>© 2026 مركز الاستشارات التقنية. سجلات العرض اصطناعية ومحلية.</p><p>قاعدة الغياب: بعد <span lang="en" dir="ltr">15 min</span> من وقت البدء.</p></div></footer>
+</body>
+</html>
