@@ -218,6 +218,7 @@
 .today-button {
   justify-self: end;
 }
+
 .schedule-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
@@ -437,6 +438,7 @@
   background: #fafcfd;
   text-align: center;
 }
+
 .agenda-empty[hidden] {
   display: none;
 }
@@ -656,6 +658,7 @@
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
 }
+
 .provider-footer {
   border-top: 1px solid #e8edf2;
   background: #fff;
