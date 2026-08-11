@@ -171,7 +171,7 @@
     elements.detailTitle.textContent = booking.guest;
     elements.detailSubtitle.textContent = `${booking.service} — ${booking.mode}`;
     elements.detailId.textContent = booking.id;
-    elements.detailBookingState.textContent = labels.booking[booing.bookingState];
+    elements.detailBookingState.textContent = labels.booking[booking.bookingState];
     elements.detailGuest.textContent = booking.guest;
     elements.detailContact.textContent = booking.contact || booking.email || "غير متاح";
     elements.detailService.textContent = booking.service;
@@ -198,7 +198,7 @@
     }
 
     elements.dateBadge.textContent = `اليوم: ${ops.formatDate(ops.todayKey())}`;
-    elements.count.innerHTML = `عرض <strong>${visible.length}</strong> م؆ ${allRecords.length} حجوزات`;
+    elements.count.innerHTML = `عرض <strong>${visible.length}</strong> من ${allRecords.length} حجوزات`;
     elements.tableWrap.hidden = visible.length === 0;
     elements.empty.hidden = visible.length !== 0;
     renderRows(visible);
@@ -216,21 +216,21 @@
     elements.proofFilter.value = "ALL";
     render();
     elements.search.focus();
-    announce("تمت إنعادة ضبط البحح والفلاتر.");
+    announce("تمت إعادة ضبط البحث والفلاتر.");
   });
 
   elements.preparationSelect.addEventListener("change", () => {
     if (!state.selectedId) return;
     ops.updateBooking(state.selectedId, { preparationState: elements.preparationSelect.value });
     render();
-    announce(bتم تحديث حالة التحضير إلى ${labels.preparation[elements.preparationSelect.value]}.`);
+    announce(`تم تحديث حالة التحضير إلى ${labels.preparation[elements.preparationSelect.value]}.`);
   });
 
   elements.proofSelect.addEventListener("change", () => {
     if (!state.selectedId) return;
     ops.updateBooking(state.selectedId, { proofState: elements.proofSelect.value });
     render();
-    announce(`تم تحدية حالة ربط الضيف إلى ${labels.proof[elements.proofSelect.value]}.`);
+    announce(`تم تحديث حالة ربط الضيف إلى ${labels.proof[elements.proofSelect.value]}.`);
   });
 
   elements.openAttendance.addEventListener("click", () => {
