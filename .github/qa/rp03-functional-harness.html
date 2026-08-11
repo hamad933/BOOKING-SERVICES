@@ -133,13 +133,43 @@
 
   const findSessionButton = (doc, guest) => [...doc.querySelectorAll(".fd-session-button")].find((b)=>b.getAttribute("aria-label")?.includes(guest));
   const testS09 = async (win, doc) => {
-    const ops=win.RP03Operations; assert(ops,"S09 operations state unavailable"); const sessions=ops.attendanceSessions();
-    const pending=sessions.filter((s)=>["UPCOMING","LATE"].includes(s.state)); assert(pending.length>=2,"S09 pending attendance fixtures missing");
-    for(const s of pending){ const elapsed=ops.currentAdenMinutes()-ops.minutesFromTime(s.start); assert(s.state===(elapsed<0?"UPCOMING":"LATE"),`S09 elapsed rule wrong for ${s.id}`); assert(s.noShowEligible===(elapsed>=15),`S09 no-show threshold wrong for ${s.id}`); }
-    const eligible=sessions.find((s)=>s.noShowEligible); assert(eligible,"S09 no-show-eligible fixture missing"); const eligibleButton=findSessionButton(doc,eligible.guest); assert(eligibleButton,"S09 eligible session button missing"); eligibleButton.click(); await sleep(40); assert(!doc.querySelector("#mark-no-show").disabled,"S09 no-show action not enabled at >=15 minutes"); doc.querySelector("#mark-no-show").click(); await sleep(50); assert(ops.attendanceSessions().find((s)=>s.id===eligible.id).state==="NO_SHOW","S09 explicit no-show action failed");
-    const checked=ops.attendanceSessions().find((s)=>s.state==="CHECKED_IN"); assert(checked,"S09 checked-in fixture missing"); findSessionButton(doc,checked.guest).click(); await sleep(30); doc.querySelector("#attendance-primary-action").click(); await sleep(40); assert(ops.attendanceSessions().find((s)=>s.id===checked.id).state==="IN_PROGRESS","S09 start-session transition failed"); doc.querySelector("#mark-completed").click(); await sleep(40); assert(ops.attendanceSessions().find((s)=>s.id===checked.id).state==="COMPLETED","S09 completion transition failed");
-    const note=doc.querySelector("#final-note"); note.value="ملاحظة ختامية تجريبية"; event(note,"input"); const follow=doc.querySelector('input[name="follow-up"][value="yes"]'); follow.checked=true; event(follow,"change"); await sleep(30);
-    return "upcoming/late threshold, explicit no-show, check-in progression, completion, note, and follow-up are functional";
+    const ops=win.RP03Operations; assert(ops,"S09 operations state unavailable");
+    const todaySessions=ops.attendanceSessions();
+    const pending=todaySessions.filter((s)=>["UPCOMING","LATE"].includes(s.state)); assert(pending.length>=2,"S09 pending attendance fixtures missing");
+    for(const s of pending){
+      const elapsed=ops.currentAdenMinutes()-ops.minutesFromTime(s.start);
+      assert(s.state===(elapsed<0?"UPCOMING":"LATE"),`S09 elapsed rule wrong for ${s.id}`);
+      assert(s.noShowEligible===(elapsed>=15),`S09 no-show threshold wrong for ${s.id}`);
+    }
+
+    const previousDay=ops.moveDateKey(ops.todayKey(),-1);
+    const previousPending=ops.attendanceSessions(previousDay).filter((s)=>["UPCOMING","LATE"].includes(s.state));
+    assert(previousPending.some((s)=>s.state==="LATE" && s.noShowEligible),"S09 >=15-minute eligibility rule failed on prior-day boundary case");
+
+    const eligibleToday=todaySessions.find((s)=>s.noShowEligible);
+    if(eligibleToday){
+      const eligibleButton=findSessionButton(doc,eligibleToday.guest); assert(eligibleButton,"S09 eligible session button missing"); eligibleButton.click(); await sleep(40);
+      assert(!doc.querySelector("#mark-no-show").disabled,"S09 no-show action not enabled at >=15 minutes");
+      doc.querySelector("#mark-no-show").click(); await sleep(50);
+      assert(ops.attendanceSessions().find((s)=>s.id===eligibleToday.id).state==="NO_SHOW","S09 explicit no-show action failed");
+    } else {
+      const underThreshold=pending.find((s)=>!s.noShowEligible); assert(underThreshold,"S09 under-threshold session missing");
+      findSessionButton(doc,underThreshold.guest).click(); await sleep(40);
+      const noShowButton=doc.querySelector("#mark-no-show"); assert(noShowButton.disabled,"S09 no-show action must stay disabled before 15 minutes");
+      const before=ops.attendanceSessions().find((s)=>s.id===underThreshold.id).state;
+      noShowButton.click(); await sleep(30);
+      const after=ops.attendanceSessions().find((s)=>s.id===underThreshold.id).state;
+      assert(after===before && after!=="NO_SHOW","S09 disabled no-show control changed attendance state");
+    }
+
+    const checked=ops.attendanceSessions().find((s)=>s.state==="CHECKED_IN"); assert(checked,"S09 checked-in fixture missing");
+    findSessionButton(doc,checked.guest).click(); await sleep(30); doc.querySelector("#attendance-primary-action").click(); await sleep(40);
+    assert(ops.attendanceSessions().find((s)=>s.id===checked.id).state==="IN_PROGRESS","S09 start-session transition failed");
+    doc.querySelector("#mark-completed").click(); await sleep(40);
+    assert(ops.attendanceSessions().find((s)=>s.id===checked.id).state==="COMPLETED","S09 completion transition failed");
+    const note=doc.querySelector("#final-note"); note.value="ملاحظة ختامية تجريبية"; event(note,"input");
+    const follow=doc.querySelector('input[name="follow-up"][value="yes"]'); follow.checked=true; event(follow,"change"); await sleep(30);
+    return "upcoming/late threshold, no-show eligibility and explicit-only behavior, check-in progression, completion, note, and follow-up are functional";
   };
 
   const testS10 = async (win, doc) => {
