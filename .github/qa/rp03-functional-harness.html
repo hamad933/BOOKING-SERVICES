@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RP03 functional regression harness</title>
+  <style>html,body{margin:0;font-family:system-ui,sans-serif}iframe{width:100%;height:900px;border:0}pre{padding:16px;white-space:pre-wrap;overflow-wrap:anywhere}</style>
+</head>
+<body data-result="PENDING">
+<script>
+(() => {
+  "use strict";
+
+  const params = new URLSearchParams(location.search);
+  const surface = (params.get("surface") || "").toUpperCase();
+  const routes = {
+    S01:"/", S02:"/services/", S03:"/services/technical-review/", S04:"/guided-choice/",
+    S05:"/book/technical-review/", S06:"/provider/schedule/", S07:"/resources/schedule/",
+    S08:"/operations/bookings/", S09:"/operations/attendance/", S10:"/admin/services/",
+    S11:"/admin/providers-resources/", S12:"/admin/availability-exceptions/"
+  };
+  const roles = {S06:"CONSULTANT",S07:"CONSULTANT",S08:"FRONT_DESK",S09:"FRONT_DESK",S10:"ADMIN",S11:"ADMIN",S12:"ADMIN"};
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  const event = (node, type) => node.dispatchEvent(new Event(type, {bubbles:true}));
+  const input = (doc, selector, value) => { const node=doc.querySelector(selector); assert(node,`Missing ${selector}`); node.value=value; event(node,"input"); return node; };
+  const change = (doc, selector, value) => { const node=doc.querySelector(selector); assert(node,`Missing ${selector}`); if(value!==undefined) node.value=value; event(node,"change"); return node; };
+  const visible = (node) => Boolean(node && !node.hidden && getComputedStyle(node).display !== "none" && getComputedStyle(node).visibility !== "hidden");
+  const finish = (payload) => {
+    document.body.dataset.result = payload.pass ? "PASS" : "FAIL";
+    const pre=document.createElement("pre"); pre.id="qa-result"; pre.textContent=JSON.stringify(payload); document.body.replaceChildren(pre);
+  };
+
+  const seedRole = (role) => {
+    sessionStorage.clear();
+    if (!role) return;
+    sessionStorage.setItem("rp03.auth.session.v1", JSON.stringify({role,displayName:`QA ${role}`,source:"functional-harness",createdAt:new Date().toISOString()}));
+  };
+
+  const testS01 = async (win, doc) => {
+    assert(doc.querySelector('a[href="/services/"]'), "S01 missing real catalog destination");
+    assert(doc.querySelector('a[href="/guided-choice/"]'), "S01 missing guided-choice destination");
+    assert(doc.querySelector('a[href="/services/technical-review/"]'), "S01 missing implemented S03 detail destination");
+    assert(doc.querySelectorAll(".service-card").length === 3, "S01 selected service cards changed unexpectedly");
+    return "discovery CTAs resolve to real approved destinations";
+  };
+
+  const testS02 = async (win, doc) => {
+    const search=doc.querySelector("#service-search-input"); assert(search,"S02 search missing");
+    search.value="__rp03_no_match__"; event(search,"input"); await sleep(60);
+    assert(visible(doc.querySelector("#catalog-empty")), "S02 no-results state did not appear");
+    doc.querySelector("#filter-reset").click(); await sleep(60);
+    assert(!visible(doc.querySelector("#catalog-empty")), "S02 reset did not clear no-results state");
+    assert([...doc.querySelectorAll(".catalog-service")].filter((item)=>!item.hidden).length === 6, "S02 reset did not restore six services");
+    return "search, no-results, and reset are functional";
+  };
+
+  const testS03 = async (win, doc) => {
+    const faq=doc.querySelector("details"); assert(faq,"S03 FAQ missing"); faq.querySelector("summary").click(); await sleep(30);
+    assert(faq.open,"S03 FAQ did not open with native keyboard/click semantics");
+    const booking=doc.querySelector('a.booking-cta[href="/book/technical-review/"]'); assert(booking,"S03 booking CTA is not wired to S05");
+    assert(doc.querySelectorAll(".related-grid a").length === 3,"S03 related-service links missing");
+    assert([...doc.querySelectorAll(".related-grid a")].every((a)=>a.getAttribute("href")==="/services/"),"S03 unimplemented related services must return to catalog");
+    return "FAQ and booking/related-service navigation are functional and truthful";
+  };
+
+  const chooseGuided = async (doc, value) => {
+    const radio=doc.querySelector(`input[type="radio"][value="${value}"]`); assert(radio,`S04 option ${value} missing`); radio.checked=true; event(radio,"change"); await sleep(20); doc.querySelector("#continue-button").click(); await sleep(40);
+  };
+
+  const testS04 = async (win, doc) => {
+    await chooseGuided(doc,"review");
+    assert(doc.querySelector("#question-step").textContent.includes("2"),"S04 did not advance to question 2");
+    doc.querySelector("#back-button").click(); await sleep(30);
+    assert(doc.querySelector("#question-step").textContent.includes("1"),"S04 back did not return to question 1");
+    await chooseGuided(doc,"review"); await chooseGuided(doc,"pending_decision"); await chooseGuided(doc,"evaluate"); await chooseGuided(doc,"goal_or_project");
+    assert(visible(doc.querySelector("#recommendation-view")),"S04 recommendation did not render");
+    assert(doc.querySelector("#recommendation-title").textContent.includes("مراجعة وتقييم تقني"),"S04 deterministic recommendation drifted");
+    assert(doc.querySelector("#recommendation-link").getAttribute("href") === "/services/technical-review/","S04 implemented recommendation target is wrong");
+    doc.querySelector("#answers-summary-list [data-edit-step='0']").click(); await sleep(30);
+    assert(visible(doc.querySelector("#question-view")) && doc.querySelector("#question-step").textContent.includes("1"),"S04 edit did not reopen the chosen answer");
+    doc.querySelector("#restart-top").click(); await sleep(30);
+    assert(doc.querySelector("#guided-flow").dataset.flowState === "RESTARTED","S04 restart did not reset flow state");
+    return "four-question flow, back, edit, restart, and deterministic recommendation are functional";
+  };
+
+  const testS05 = async (win, doc) => {
+    const inPerson=doc.querySelector('input[name="session-mode"][value="in-person"]'); inPerson.checked=true; event(inPerson,"change"); await sleep(40);
+    assert(doc.querySelector("#summary-mode").textContent.includes("حضوري"),"S05 mode change failed");
+
+    const unavailable=[...doc.querySelectorAll(".date-option")].find((b)=>b.getAttribute("aria-disabled")==="true"); assert(unavailable,"S05 expected deterministic unavailable date missing"); unavailable.click(); await sleep(40);
+    assert(visible(doc.querySelector("#empty-availability")),"S05 no-availability state failed");
+    const available=[...doc.querySelectorAll(".date-option")].find((b)=>b.getAttribute("aria-disabled")==="false"); assert(available,"S05 available date missing"); available.click(); await sleep(50);
+
+    input(doc,"#full-name","A"); input(doc,"#contact-value","bad"); doc.querySelector("#confirm-booking").click(); await sleep(30);
+    assert(doc.querySelector("#full-name").getAttribute("aria-invalid")==="true" && doc.querySelector("#contact-value").getAttribute("aria-invalid")==="true","S05 contact validation did not reject invalid data");
+    input(doc,"#full-name","مستخدم اختبار"); input(doc,"#contact-value","qa@example.test");
+
+    const stale=[...doc.querySelectorAll(".time-option")].find((b)=>!b.disabled && b.dataset.staleCandidate==="true"); assert(stale,"S05 stale-slot candidate missing"); stale.click(); await sleep(30); doc.querySelector("#confirm-booking").click(); await sleep(50);
+    assert(visible(doc.querySelector("#stale-warning")),"S05 stale-slot warning did not trigger");
+    const safe=[...doc.querySelectorAll(".time-option")].find((b)=>!b.disabled && b.dataset.staleCandidate!=="true"); assert(safe,"S05 safe replacement slot missing"); safe.click(); await sleep(30); doc.querySelector("#confirm-booking").click(); await sleep(60);
+    assert(visible(doc.querySelector("#confirmation-panel")),"S05 confirmation did not render");
+    assert(/^LOCAL-RP03-/.test(doc.querySelector("#local-reference").textContent),"S05 local confirmation reference missing");
+    return "mode, dates, no-availability, stale slot, validation, and confirmation are functional";
+  };
+
+  const testS06 = async (win, doc) => {
+    const agenda=[...doc.querySelectorAll(".agenda-item")]; assert(agenda.length>=2,"S06 agenda missing"); agenda[1].click(); await sleep(50);
+    assert(doc.querySelectorAll('.agenda-item[aria-selected="true"]').length===1,"S06 session selection failed");
+    const box=doc.querySelector("#preparation-list input[type='checkbox']"); assert(box,"S06 preparation checklist missing"); const before=box.checked; box.click(); await sleep(60);
+    const current=doc.querySelector("#preparation-list input[type='checkbox']"); assert(current.checked!==before,"S06 preparation state did not persist through render");
+    assert(doc.querySelector("#session-primary-action"),"S06 contextual action missing");
+    return "agenda selection, preparation state, and contextual action are functional";
+  };
+
+  const testS07 = async (win, doc) => {
+    const labels=[...doc.querySelectorAll(".resource-label")]; assert(labels.length>=2,"S07 resource rows missing"); labels[1].click(); await sleep(60);
+    const selected=doc.querySelector('.resource-label[aria-pressed="true"]'); assert(selected,"S07 resource selection failed");
+    const row=selected.closest(".resource-row"); const block=row?.querySelector(".schedule-block"); assert(block,"S07 selected resource has no schedule block"); block.click(); await sleep(50);
+    assert(block.getAttribute("aria-pressed")==="true" || doc.querySelector('.schedule-block[aria-pressed="true"]'),"S07 occupancy block selection failed");
+    assert(doc.querySelector("#detail-resource").textContent.trim()!=="—","S07 occupancy detail did not update");
+    return "timeline resource selection and occupancy detail are functional";
+  };
+
+  const testS08 = async (win, doc) => {
+    input(doc,"#booking-search","__rp03_no_match__"); await sleep(40); assert(visible(doc.querySelector("#booking-empty")),"S08 no-results state failed");
+    doc.querySelector("#booking-reset").click(); await sleep(50); const rows=[...doc.querySelectorAll("#booking-table-body tr")]; assert(rows.length>0,"S08 reset did not restore bookings"); rows[0].click(); await sleep(40);
+    assert(doc.querySelector('#booking-table-body tr[aria-selected="true"]'),"S08 booking selection failed");
+    change(doc,"#detail-preparation-select","READY"); await sleep(40); assert(doc.querySelector("#detail-preparation-select").value==="READY","S08 preparation state update failed");
+    change(doc,"#detail-proof-select","VERIFIED"); await sleep(40); assert(doc.querySelector("#detail-proof-select").value==="VERIFIED","S08 guest-proof state update failed");
+    return "search, reset, booking selection, preparation, and guest-proof state are functional";
+  };
+
+  const findSessionButton = (doc, guest) => [...doc.querySelectorAll(".fd-session-button")].find((b)=>b.getAttribute("aria-label")?.includes(guest));
+  const testS09 = async (win, doc) => {
+    const ops=win.RP03Operations; assert(ops,"S09 operations state unavailable"); const sessions=ops.attendanceSessions();
+    const pending=sessions.filter((s)=>["UPCOMING","LATE"].includes(s.state)); assert(pending.length>=2,"S09 pending attendance fixtures missing");
+    for(const s of pending){ const elapsed=ops.currentAdenMinutes()-ops.minutesFromTime(s.start); assert(s.state===(elapsed<0?"UPCOMING":"LATE"),`S09 elapsed rule wrong for ${s.id}`); assert(s.noShowEligible===(elapsed>=15),`S09 no-show threshold wrong for ${s.id}`); }
+    const eligible=sessions.find((s)=>s.noShowEligible); assert(eligible,"S09 no-show-eligible fixture missing"); const eligibleButton=findSessionButton(doc,eligible.guest); assert(eligibleButton,"S09 eligible session button missing"); eligibleButton.click(); await sleep(40); assert(!doc.querySelector("#mark-no-show").disabled,"S09 no-show action not enabled at >=15 minutes"); doc.querySelector("#mark-no-show").click(); await sleep(50); assert(ops.attendanceSessions().find((s)=>s.id===eligible.id).state==="NO_SHOW","S09 explicit no-show action failed");
+    const checked=ops.attendanceSessions().find((s)=>s.state==="CHECKED_IN"); assert(checked,"S09 checked-in fixture missing"); findSessionButton(doc,checked.guest).click(); await sleep(30); doc.querySelector("#attendance-primary-action").click(); await sleep(40); assert(ops.attendanceSessions().find((s)=>s.id===checked.id).state==="IN_PROGRESS","S09 start-session transition failed"); doc.querySelector("#mark-completed").click(); await sleep(40); assert(ops.attendanceSessions().find((s)=>s.id===checked.id).state==="COMPLETED","S09 completion transition failed");
+    const note=doc.querySelector("#final-note"); note.value="ملاحظة ختامية تجريبية"; event(note,"input"); const follow=doc.querySelector('input[name="follow-up"][value="yes"]'); follow.checked=true; event(follow,"change"); await sleep(30);
+    return "upcoming/late threshold, explicit no-show, check-in progression, completion, note, and follow-up are functional";
+  };
+
+  const testS10 = async (win, doc) => {
+    input(doc,"#service-search","__rp03_no_match__"); await sleep(30); assert(visible(doc.querySelector("#service-empty")),"S10 no-results state failed"); doc.querySelector("#service-reset").click(); await sleep(40);
+    doc.querySelector("#service-add").click(); await sleep(30); input(doc,"#service-title","خدمة QA محلية"); input(doc,"#service-description","وصف اصطناعي لاختبار الإنشاء المحلي."); change(doc,"#service-category","مراجعة وتقييم"); change(doc,"#service-duration","60–90 دقيقة"); const remote=doc.querySelector("#service-mode-remote"); remote.checked=true; event(remote,"change"); doc.querySelector("#service-active").checked=true; doc.querySelector("#service-form").requestSubmit(); await sleep(60);
+    assert(win.RP03AdminState.load().services.some((s)=>s.title==="خدمة QA محلية"),"S10 create did not persist locally"); input(doc,"#service-title","خدمة QA محلية معدلة"); doc.querySelector("#service-form").requestSubmit(); await sleep(50); assert(win.RP03AdminState.load().services.some((s)=>s.title==="خدمة QA محلية معدلة"),"S10 edit did not persist locally");
+    return "search, reset, local create, edit, and active state are functional";
+  };
+
+  const testS11 = async (win, doc) => {
+    input(doc,"#provider-search","__rp03_no_match__"); await sleep(30); assert(visible(doc.querySelector("#provider-empty")),"S11 provider search no-results failed"); doc.querySelector("#provider-reset").click(); await sleep(30);
+    doc.querySelector("#entity-add").click(); await sleep(30); input(doc,"#provider-name","مستشار QA"); input(doc,"#provider-role","مستشار تقني"); input(doc,"#provider-specialties","اختبار، مراجعة"); const remote=doc.querySelector("#provider-mode-remote"); remote.checked=true; event(remote,"change"); doc.querySelector("#provider-active").checked=true; doc.querySelector("#provider-form").requestSubmit(); await sleep(50); assert(win.RP03AdminState.load().providers.some((p)=>p.name==="مستشار QA"),"S11 provider create failed");
+    doc.querySelector('[data-entity-tab="resources"]').click(); await sleep(40); assert(doc.querySelector('[data-entity-tab="resources"]').getAttribute("aria-selected")==="true","S11 resource tab switch failed"); doc.querySelector("#entity-add").click(); await sleep(30); input(doc,"#resource-name","مورد QA"); input(doc,"#resource-type","غرفة اختبار"); input(doc,"#resource-capacity","3"); input(doc,"#resource-characteristics","شاشة، سبورة"); doc.querySelector("#resource-active").checked=true; doc.querySelector("#resource-form").requestSubmit(); await sleep(50); assert(win.RP03AdminState.load().resources.some((r)=>r.name==="مورد QA"),"S11 resource create failed");
+    return "provider/resource tabs, search, and local create flows are functional";
+  };
+
+  const testS12 = async (win, doc) => {
+    input(doc,"#rule-search","__rp03_no_match__"); await sleep(30); assert(visible(doc.querySelector("#rule-empty")),"S12 rule search no-results failed"); doc.querySelector("#rule-reset").click(); await sleep(30);
+    doc.querySelector("#rule-add").click(); await sleep(30); input(doc,"#rule-title","قاعدة QA"); change(doc,"#rule-scope-type","CENTER"); input(doc,"#rule-scope-label","جميع الخدمات"); input(doc,"#rule-days","الأحد–الخميس"); input(doc,"#rule-start-time","08:00"); input(doc,"#rule-end-time","09:00"); doc.querySelector("#rule-active").checked=true; doc.querySelector("#rule-form").requestSubmit(); await sleep(50); assert(win.RP03AdminState.load().availabilityRules.some((r)=>r.title==="قاعدة QA"),"S12 rule create failed");
+    doc.querySelector('[data-av-tab="exceptions"]').click(); await sleep(30); doc.querySelector("#exception-add").click(); await sleep(30); input(doc,"#exception-title","استثناء QA متداخل"); change(doc,"#exception-type","MAINTENANCE"); change(doc,"#exception-state","SCHEDULED"); change(doc,"#exception-scope-type","RESOURCE"); input(doc,"#exception-scope-label","غرفة الاستشارة 2"); input(doc,"#exception-start-date","2026-08-14"); input(doc,"#exception-end-date","2026-08-14"); input(doc,"#exception-start-time","11:00"); input(doc,"#exception-end-time","12:00"); ["#exception-title","#exception-type","#exception-state","#exception-scope-type","#exception-scope-label","#exception-start-date","#exception-end-date","#exception-start-time","#exception-end-time"].forEach((sel)=>event(doc.querySelector(sel),doc.querySelector(sel).tagName==="SELECT"?"change":"input")); await sleep(50);
+    assert(visible(doc.querySelector("#overlap-warning")),"S12 overlap warning did not appear"); assert(doc.querySelectorAll("#impact-preview li").length>=2,"S12 impact preview did not render"); doc.querySelector("#exception-form").requestSubmit(); await sleep(50); assert(win.RP03AdminState.load().exceptions.some((x)=>x.title==="استثناء QA متداخل"),"S12 exception create failed");
+    return "rules, exceptions, search, create, overlap warning, and impact preview are functional";
+  };
+
+  const tests={S01:testS01,S02:testS02,S03:testS03,S04:testS04,S05:testS05,S06:testS06,S07:testS07,S08:testS08,S09:testS09,S10:testS10,S11:testS11,S12:testS12};
+  if(!routes[surface]||!tests[surface]){finish({pass:false,surface,error:"Unknown surface"});return;}
+  seedRole(roles[surface]);
+  const frame=document.createElement("iframe"); frame.title=`${surface} functional test`; frame.src=routes[surface]; document.body.append(frame);
+  frame.addEventListener("load",()=>setTimeout(async()=>{
+    try{
+      const win=frame.contentWindow,doc=frame.contentDocument;
+      assert(win.location.pathname===routes[surface],`${surface} loaded ${win.location.pathname} instead of ${routes[surface]}`);
+      assert(doc.body?.dataset.authPending!=="true",`${surface} protected content guard remained pending`);
+      const detail=await tests[surface](win,doc);
+      finish({pass:true,surface,route:routes[surface],detail});
+    }catch(error){finish({pass:false,surface,route:routes[surface],error:String(error),stack:error?.stack||""});}
+  },1000));
+})();
+</script>
+</body>
+</html>
