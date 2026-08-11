@@ -25,26 +25,6 @@
     ADMIN: "مسؤول النظام التجريبي"
   };
 
-  sessionStorage.clear();
-  if (validRoles.has(role)) {
-    sessionStorage.setItem("rp03.auth.session.v1", JSON.stringify({
-      role,
-      displayName: displayNames[role],
-      source: "rp03-hardening-evidence-harness",
-      createdAt: new Date().toISOString()
-    }));
-  }
-
-  if (mode !== "probe") {
-    window.location.replace(target);
-    return;
-  }
-
-  const frame = document.createElement("iframe");
-  frame.title = "RP03 responsive QA probe";
-  frame.src = target;
-  document.body.append(frame);
-
   const finish = (result) => {
     document.body.dataset.result = result.pass ? "PASS" : "FAIL";
     const output = document.createElement("pre");
@@ -53,28 +33,168 @@
     document.body.replaceChildren(output);
   };
 
-  frame.addEventListener("load", () => {
-    window.setTimeout(() => {
-      try {
-        const doc = frame.contentDocument;
-        const root = doc.documentElement;
-        const path = `${frame.contentWindow.location.pathname}${frame.contentWindow.location.search}`;
-        const horizontalOverflow = root.scrollWidth > root.clientWidth + 1;
-        const runtimeGuardPending = doc.body?.dataset.authPending === "true";
-        finish({
-          pass: !horizontalOverflow && !runtimeGuardPending,
-          target,
-          path,
-          clientWidth: root.clientWidth,
-          scrollWidth: root.scrollWidth,
-          horizontalOverflow,
-          runtimeGuardPending
-        });
-      } catch (error) {
-        finish({ pass: false, target, error: String(error) });
-      }
-    }, 700);
-  });
+  const seedRole = (selectedRole) => {
+    sessionStorage.removeItem("rp03.auth.session.v1");
+    if (!validRoles.has(selectedRole)) return;
+    sessionStorage.setItem("rp03.auth.session.v1", JSON.stringify({
+      role: selectedRole,
+      displayName: displayNames[selectedRole],
+      source: "rp03-hardening-evidence-harness",
+      createdAt: new Date().toISOString()
+    }));
+  };
+
+  const loadFrame = (src, callback) => {
+    const frame = document.createElement("iframe");
+    frame.title = "RP03 hardening browser probe";
+    frame.src = src;
+    document.body.append(frame);
+    let completed = false;
+    const inspect = () => {
+      if (completed) return;
+      window.setTimeout(() => {
+        if (completed) return;
+        try {
+          completed = callback(frame) === true;
+        } catch (error) {
+          completed = true;
+          finish({ pass: false, target: src, error: String(error) });
+        }
+      }, 850);
+    };
+    frame.addEventListener("load", inspect);
+  };
+
+  sessionStorage.clear();
+  seedRole(role);
+
+  if (mode === "redirect") {
+    window.location.replace(target);
+    return;
+  }
+
+  if (mode === "auth") {
+    const candidate = params.get("candidate") || "";
+    const expected = params.get("expected") || "__null__";
+    loadFrame("/login/", (frame) => {
+      const api = frame.contentWindow.RP03Auth;
+      if (!api) return false;
+      const actual = api.safeReturnPath(candidate);
+      const pass = expected === "__null__" ? actual === null : actual === expected;
+      finish({ pass, candidate, expected, actual });
+      return true;
+    });
+    return;
+  }
+
+  if (mode === "xss") {
+    const surface = params.get("surface") || "";
+    const marker = `<img data-rp03-xss="${surface}" src=x onerror="document.body.dataset.rp03XssExecuted='true'">`;
+    let xssTarget = target;
+    let verifier = () => true;
+
+    if (surface === "s05-s08") {
+      seedRole("FRONT_DESK");
+      sessionStorage.setItem("rp03.s05.booking.v1", JSON.stringify({
+        confirmed: true,
+        reference: `QA-${marker}`,
+        selectedDate: "2026-08-11",
+        selectedTime: "10:30",
+        fullName: marker,
+        contactKind: "email",
+        contactValue: `qa+${marker}@example.test`,
+        mode: "remote"
+      }));
+      xssTarget = "/operations/bookings/";
+      verifier = (doc) => doc.body.textContent.includes(marker);
+    } else if (surface === "s09") {
+      seedRole("FRONT_DESK");
+      sessionStorage.setItem("rp03.frontdesk.operations.v1", JSON.stringify({
+        attendanceOverrides: { "AT-0401": { note: marker } },
+        selectedSessionId: "AT-0401"
+      }));
+      xssTarget = "/operations/attendance/";
+      verifier = (doc) => doc.querySelector("#final-note")?.value === marker;
+    } else if (surface === "s10") {
+      seedRole("ADMIN");
+      sessionStorage.setItem("rp03.admin.operations.v1", JSON.stringify({
+        services: [{ id:"qa-service", title:marker, description:marker, category:"مراجعة وتقييم", duration:"60–90 دقيقة", modes:["عن بُعد"], preparationRequired:true, preparationSummary:marker, active:true }]
+      }));
+      xssTarget = "/admin/services/";
+      verifier = (doc) => doc.body.textContent.includes(marker);
+    } else if (surface === "s11-provider") {
+      seedRole("ADMIN");
+      sessionStorage.setItem("rp03.admin.operations.v1", JSON.stringify({
+        providers: [{ id:"qa-provider", name:marker, role:marker, specialties:[marker], experience:marker, modes:["عن بُعد"], active:true, notes:marker }]
+      }));
+      xssTarget = "/admin/providers-resources/";
+      verifier = (doc) => doc.body.textContent.includes(marker);
+    } else if (surface === "s11-resource") {
+      seedRole("ADMIN");
+      sessionStorage.setItem("rp03.admin.operations.v1", JSON.stringify({
+        resources: [{ id:"qa-resource", name:marker, type:marker, capacity:2, characteristics:[marker], active:true, notes:marker }]
+      }));
+      xssTarget = "/admin/providers-resources/";
+      verifier = (doc) => {
+        doc.querySelector('[data-entity-tab="resources"]')?.click();
+        return doc.body.textContent.includes(marker);
+      };
+    } else if (surface === "s12-rule") {
+      seedRole("ADMIN");
+      sessionStorage.setItem("rp03.admin.operations.v1", JSON.stringify({
+        availabilityRules: [{ id:"qa-rule", title:marker, scopeType:"CENTER", scopeLabel:marker, days:marker, startTime:"09:00", endTime:"10:00", active:true, notes:marker }]
+      }));
+      xssTarget = "/admin/availability-exceptions/";
+      verifier = (doc) => doc.body.textContent.includes(marker);
+    } else if (surface === "s12-exception") {
+      seedRole("ADMIN");
+      sessionStorage.setItem("rp03.admin.operations.v1", JSON.stringify({
+        exceptions: [{ id:"qa-exception", type:"MAINTENANCE", title:marker, scopeType:"RESOURCE", scopeLabel:marker, startDate:"2026-08-14", endDate:"2026-08-14", startTime:"09:00", endTime:"10:00", state:"SCHEDULED", notes:marker }]
+      }));
+      xssTarget = "/admin/availability-exceptions/";
+      verifier = (doc) => {
+        doc.querySelector('[data-av-tab="exceptions"]')?.click();
+        return doc.body.textContent.includes(marker);
+      };
+    } else {
+      finish({ pass:false, surface, error:"Unknown XSS test surface." });
+      return;
+    }
+
+    loadFrame(xssTarget, (frame) => {
+      const doc = frame.contentDocument;
+      const injectedElement = doc.querySelector("[data-rp03-xss]");
+      const executed = doc.body?.dataset.rp03XssExecuted === "true";
+      const literalPreserved = verifier(doc);
+      const pass = !injectedElement && !executed && literalPreserved;
+      finish({ pass, surface, injectedElement:Boolean(injectedElement), executed, literalPreserved });
+      return true;
+    });
+    return;
+  }
+
+  if (mode === "probe") {
+    loadFrame(target, (frame) => {
+      const doc = frame.contentDocument;
+      const root = doc.documentElement;
+      const path = `${frame.contentWindow.location.pathname}${frame.contentWindow.location.search}`;
+      const horizontalOverflow = root.scrollWidth > root.clientWidth + 1;
+      const runtimeGuardPending = doc.body?.dataset.authPending === "true";
+      finish({
+        pass: !horizontalOverflow && !runtimeGuardPending,
+        target,
+        path,
+        clientWidth: root.clientWidth,
+        scrollWidth: root.scrollWidth,
+        horizontalOverflow,
+        runtimeGuardPending
+      });
+      return true;
+    });
+    return;
+  }
+
+  finish({ pass:false, mode, error:"Unknown harness mode." });
 })();
 </script>
 </body>
