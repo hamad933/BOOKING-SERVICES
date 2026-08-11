@@ -72,7 +72,7 @@
     body.innerHTML = items.map((item) => {
       const selected = item.id === selectedId;
       return `<tr data-selected="${selected}">
-        <td><button class="admin-record-button" type="button" data-service-id="${escapeHtml(item.id)}" aria-pressed="${selected}">${escapeHtml(item.title)}${selected ? '<span class="admin-selected-cue">محدد</span>' : ''}<small>${item.origin === "accepted-catalog-reference" ? "نسخة محلية من مفهوم S02" : "سجل اصطناعي مضاف محليًا"}</small></button></td>
+        <td><button class="admin-record-button" type="button" data-service-id="${escapeHtml(item.id)}" aria-pressed="${selected}">${escapeHtml(item.title)}${selected ? '<span class="admin-selected-cue">محدد</span>' : ''}<small>${item.origin === "accepted-catalog-reference" ? "نسخة محلية من مفهوم الكتالوج العام" : "سجل اصطناعي مضاف محليًا"}</small></button></td>
         <td>${escapeHtml(item.category)}</td><td><span dir="ltr">${escapeHtml(item.duration.replace(" دقيقة", ""))}</span> دقيقة</td><td>${escapeHtml(item.modes.join("، "))}</td><td>${item.preparationRequired ? "مطلوب" : "غير مطلوب"}</td>
         <td><span class="admin-status ${item.active ? "admin-status-active" : "admin-status-inactive"}">${statusText(item.active)}</span></td>
       </tr>`;
@@ -111,7 +111,7 @@
     clearError();
     kicker.textContent = "الخدمة المحددة";
     detailTitle.textContent = item.title;
-    detailSubtitle.textContent = item.origin === "accepted-catalog-reference" ? "نسخة إدارة محلية متوافقة مع مفهوم الخدمة في S02." : "سجل خدمة اصطناعي أُضيف داخل هذه الجلسة.";
+    detailSubtitle.textContent = item.origin === "accepted-catalog-reference" ? "نسخة إدارة محلية متوافقة مع مفهوم الخدمة في الكتالوج العام." : "سجل خدمة اصطناعي أُضيف داخل هذه الجلسة.";
     writeForm(item);
     setFormEnabled(true);
     render();
