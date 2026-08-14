@@ -42,6 +42,17 @@ reports/
 credentials*.json
 secrets*.json
 
+# Local SQLite runtime databases and sidecars
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
 # Local evidence artifacts not intentionally committed
 .evidence/
 evidence-local/
