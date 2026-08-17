@@ -2,11 +2,11 @@
 
 ## Repository role
 
-This private repository is the legal repository of record for RP03 technical and execution truth: source files, branches, commits, pull requests, CI checks, and repository-hosted technical evidence.
+This public repository is the legal repository of record for RP03 technical and execution truth: source files, branches, commits, pull requests, CI checks, and repository-hosted technical evidence.
 
 Google Drive retains the governed RP03 administrative state, including accepted decisions, gate records, continuity records, and other controller-approved state. Executors do not update that state unless a later bounded contract explicitly authorizes it.
 
-The RP03 static control pack governs stable product and domain invariants. It is not copied into this repository by this governance workstream.
+The RP03 static control pack governs stable product and domain invariants. It is not copied into this repository by this workstream.
 
 ## Current implementation status
 
@@ -16,7 +16,9 @@ Real RP03 S01-S12 UI implementation is present in the repository under bounded, 
 
 **Production foundation design status: APPROVED.**
 
-**Production foundation implementation status: NOT STARTED.**
+**Production foundation implementation status: IN PROGRESS.**
+
+`RP03-PRODUCTION-FOUNDATION-W01` introduces only the first bounded server/data foundation: a same-origin plain-PHP runtime, SQLite 3 through `PDO_SQLITE`, explicit CLI-only numbered migrations, synthetic development seeding, read-only public service APIs, and focused integration validation. It does not activate production authentication or authoritative booking confirmation.
 
 The Controller-approved minimum production foundation is:
 
@@ -43,6 +45,26 @@ The following product decisions remain unresolved and must not be represented as
 - `RP03-DQ-013` — UNRESOLVED — concrete scheduled-duration rule for authoritative bookable intervals.
 
 This repository status does not by itself authorize additional product work; each change still requires a bounded Workstream Contract.
+
+## W01 local foundation execution
+
+The database location comes from `RP03_DB_PATH`. If it is unset, development falls back to the ignored local file `database/rp03.local.sqlite`. Runtime SQLite files and WAL/SHM sidecars remain prohibited from Git.
+
+Typical local execution after ensuring PHP 8.x with `PDO_SQLITE` is available:
+
+```bash
+php database/migrate.php
+php database/seed.php
+php -S 127.0.0.1:8000 server/router.php
+```
+
+The W01 public API surface is intentionally read-only:
+
+- `GET /api/health`
+- `GET /api/services`
+- `GET /api/services/{slug}`
+
+Normal HTTP requests never run migrations or seeds. The accepted S01-S12 browser implementation remains unchanged in W01; S02 is not yet server-integrated.
 
 ## Execution governance
 
