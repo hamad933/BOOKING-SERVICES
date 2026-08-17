@@ -143,7 +143,7 @@ jobs:
           require_readme "Product implementation status: IN PROGRESS."
           require_readme "Real RP03 S01-S12 UI implementation is present in the repository"
           require_readme "Production foundation design status: APPROVED."
-          require_readme "Production foundation implementation status: NOT STARTED."
+          require_readme "Production foundation implementation status: IN PROGRESS."
           require_readme "semantic HTML + plain CSS + browser-native JavaScript"
           require_readme "supported PHP 8.x release at implementation time"
           require_readme "SQLite 3"
@@ -162,6 +162,11 @@ jobs:
 
           if grep -Fq "Product implementation status: NOT STARTED." README.md; then
             echo "README contains the stale NOT STARTED status for the already-existing S01-S12 product UI." >&2
+            exit 1
+          fi
+
+          if grep -Fq "Production foundation implementation status: NOT STARTED." README.md; then
+            echo "README contains the stale NOT STARTED status for the active production-foundation implementation." >&2
             exit 1
           fi
 
