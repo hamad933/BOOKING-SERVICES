@@ -19,6 +19,20 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Record required Git validation
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git branch --force main "$BASE_SHA"
+          git status --short
+          git diff --check
+          git diff --check main...HEAD
+          git diff --name-only main...HEAD
+          git log --oneline --decorate --max-count=15
+
       - name: Verify PHP and PDO_SQLITE
         shell: bash
         run: |
