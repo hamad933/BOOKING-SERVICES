@@ -98,6 +98,17 @@ jobs:
           require_term AGENTS.md "WORKSTREAM_ID"
           require_term AGENTS.md "Execution Handoff"
           require_term AGENTS.md "RP03 Central Controller"
+          require_term AGENTS.md "PHP 8.x + SQLite 3 + PDO_SQLITE"
+          require_term AGENTS.md "semantic HTML + plain CSS + browser-native JavaScript"
+          require_term AGENTS.md "No framework or ORM is approved by default."
+          require_term AGENTS.md "SINGLE_HOST_LOCAL_DURABLE_STORAGE"
+          require_term AGENTS.md "Database/schema/migration work requires an explicitly authorized workstream."
+          require_term AGENTS.md "migrations must be numbered and immutable after acceptance"
+          require_term AGENTS.md "migrations must never run automatically from normal HTTP requests"
+          require_term AGENTS.md "destructive migrations require separate explicit authority"
+          require_term AGENTS.md "Server-side authorization is authoritative; client route guards remain UX only."
+          require_term AGENTS.md "Booking/schedule authority changes require transaction and concurrency evidence."
+          require_term AGENTS.md "Production data is prohibited in normal development/testing."
 
           require_term CONTRIBUTING.md "Workstream Contract"
           require_term CONTRIBUTING.md "main"
@@ -106,50 +117,115 @@ jobs:
           require_term CONTRIBUTING.md "Execution Handoff"
           require_term CONTRIBUTING.md "Central Controller"
           require_term CONTRIBUTING.md "Google Drive"
+          require_term CONTRIBUTING.md "PHP syntax validation"
+          require_term CONTRIBUTING.md "real SQLite integration tests"
+          require_term CONTRIBUTING.md "empty database"
+          require_term CONTRIBUTING.md "prior supported schema"
+          require_term CONTRIBUTING.md "transaction rollback evidence"
+          require_term CONTRIBUTING.md "concurrency test for competing exclusive-slot confirmation"
+          require_term CONTRIBUTING.md "authorization negative tests"
+          require_term CONTRIBUTING.md "Exact-head CI evidence"
 
-      - name: Verify README guardrails
+      - name: Verify canonical architecture and status truth
         shell: bash
         run: |
           set -euo pipefail
 
-          grep -Fq "RP03 — Booking & Services" README.md
-          grep -Fq "Product implementation status: IN PROGRESS." README.md
-          grep -Fq "Real RP03 UI implementation is present in the repository" README.md
-          grep -Fq "Implementation progress must not be interpreted as product completion, product readiness, release readiness, deployment readiness" README.md
-          grep -Fq "or approval of a framework, backend, database, production API, deployment approach, broad application stack, or production architecture." README.md
-          grep -Fq "product completion" README.md
-          grep -Fq "product readiness" README.md
-          grep -Fq "release readiness" README.md
-          grep -Fq "deployment readiness" README.md
-          grep -Fq "framework" README.md
-          grep -Fq "backend" README.md
-          grep -Fq "database" README.md
-          grep -Fq "production API" README.md
-          grep -Fq "deployment approach" README.md
-          grep -Fq "broad application stack" README.md
-          grep -Fq "production architecture" README.md
+          require_readme() {
+            local term="$1"
+            if ! grep -Fq "$term" README.md; then
+              echo "Missing canonical README truth: $term" >&2
+              exit 1
+            fi
+          }
+
+          require_readme "RP03 — Booking & Services"
+          require_readme "Product implementation status: IN PROGRESS."
+          require_readme "Real RP03 S01-S12 UI implementation is present in the repository"
+          require_readme "Production foundation design status: APPROVED."
+          require_readme "Production foundation implementation status: NOT STARTED."
+          require_readme "semantic HTML + plain CSS + browser-native JavaScript"
+          require_readme "supported PHP 8.x release at implementation time"
+          require_readme "SQLite 3"
+          require_readme "PDO_SQLITE"
+          require_readme "parameterized SQL and no ORM"
+          require_readme "same-origin HTTP/JSON only where authoritative server behavior is required"
+          require_readme "SINGLE_HOST_LOCAL_DURABLE_STORAGE"
+          require_readme "No framework or ORM is approved by default."
+          require_readme "Architecture approval records technical direction; it does not itself authorize deployment"
+          require_readme "RP03-DQ-004"
+          require_readme "RP03-DQ-005"
+          require_readme "RP03-DQ-006"
+          require_readme "RP03-DQ-007"
+          require_readme "RP03-DQ-012"
+          require_readme "RP03-DQ-013"
 
           if grep -Fq "Product implementation status: NOT STARTED." README.md; then
-            echo "README contains the stale NOT STARTED implementation status." >&2
+            echo "README contains the stale NOT STARTED status for the already-existing S01-S12 product UI." >&2
             exit 1
           fi
 
-          if grep -Fq "No framework, database, API, UI, deployment approach, application stack, or architecture has been approved." README.md; then
-            echo "README contains the stale no-UI-approved assertion." >&2
+          if grep -Eiq '^[[:space:]]*(PRODUCT|RELEASE|DEPLOYMENT|PRODUCTION)[[:space:]_-]+READY[[:space:][:punct:]]*$' README.md; then
+            echo "README contains a readiness declaration." >&2
             exit 1
           fi
 
-          if grep -Eiq 'Product implementation status:[[:space:]]*(READY|COMPLETE|IMPLEMENTED)' README.md; then
-            echo "README claims product implementation readiness." >&2
+          if grep -Eiq '^[[:space:]]*\*{0,2}(Product|Release|Deployment|Production)[[:space:]]+(status|readiness)\*{0,2}:[[:space:]]*\*{0,2}(READY|COMPLETE|APPROVED_FOR_RELEASE|APPROVED_FOR_DEPLOYMENT|PRODUCTION_READY)\*{0,2}[[:space:][:punct:]]*$' README.md; then
+            echo "README claims product/release/deployment/production readiness." >&2
             exit 1
           fi
 
-          if grep -Eiq '(approved|selected)[[:space:]]+(application[[:space:]]+)?(stack|framework|backend|database|production[[:space:]]+API|deployment|architecture)' README.md; then
-            echo "README appears to claim an approved stack, backend, deployment approach, or architecture." >&2
+          if grep -Eiq '^[[:space:]-]*(framework|orm)[[:space:]]*:[[:space:]]*[A-Za-z0-9_.+-]+' README.md AGENTS.md CONTRIBUTING.md; then
+            echo "Governance files appear to select a framework or ORM." >&2
             exit 1
           fi
 
-      - name: Verify diff hygiene and bootstrap path boundary
+          if grep -Eiq '^[[:space:]-]*(production[[:space:]]+database|database|persistence)[[:space:]]*:[[:space:]]*(PostgreSQL|MySQL|MariaDB|SQL[[:space:]]+Server|Oracle|MongoDB|DynamoDB|CockroachDB)\b' README.md AGENTS.md CONTRIBUTING.md; then
+            echo "Governance files appear to substitute an unapproved production database." >&2
+            exit 1
+          fi
+
+          for dq in RP03-DQ-004 RP03-DQ-005 RP03-DQ-006 RP03-DQ-007 RP03-DQ-012 RP03-DQ-013; do
+            if ! grep -Eiq "\`${dq}\`[[:space:]]+—[[:space:]]+UNRESOLVED" README.md; then
+              echo "README no longer marks $dq as unresolved." >&2
+              exit 1
+            fi
+          done
+
+          if grep -Eiq '^[[:space:]-]*(identity|identity provider|payment|payment provider|notification|notification provider|remote-session|remote session)[[:space:]]+(policy|provider|model)?[[:space:]]*:[[:space:]]*(SETTLED|APPROVED|SELECTED|FINAL)\b' README.md AGENTS.md CONTRIBUTING.md; then
+            echo "Governance files appear to settle an unresolved identity/payment/notification/remote-session policy." >&2
+            exit 1
+          fi
+
+      - name: Verify SQLite runtime ignore protection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_ignores=(
+            "*.db"
+            "*.db-wal"
+            "*.db-shm"
+            "*.sqlite"
+            "*.sqlite-wal"
+            "*.sqlite-shm"
+            "*.sqlite3"
+            "*.sqlite3-wal"
+            "*.sqlite3-shm"
+          )
+
+          for pattern in "${required_ignores[@]}"; do
+            if ! grep -Fxq "$pattern" .gitignore; then
+              echo "Missing SQLite runtime ignore rule: $pattern" >&2
+              exit 1
+            fi
+          done
+
+          grep -Fxq ".env" .gitignore
+          grep -Fxq ".env.*" .gitignore
+          grep -Fxq "!.env.example" .gitignore
+
+      - name: Verify diff hygiene and bounded path boundaries
         if: github.event_name == 'pull_request'
         shell: bash
         env:
@@ -202,21 +278,51 @@ jobs:
             mapfile -t changed_paths < <(git diff --name-only "$BASE_SHA"...HEAD | sort)
 
             if [[ "${#changed_paths[@]}" -ne "${#authorized_paths[@]}" ]]; then
-              echo "Governance remediation must change exactly the two authorized paths." >&2
+              echo "Governance status remediation must change exactly the two authorized paths." >&2
               printf 'Changed path: %s\n' "${changed_paths[@]}" >&2
               exit 1
             fi
 
             for i in "${!authorized_paths[@]}"; do
               if [[ "${changed_paths[$i]}" != "${authorized_paths[$i]}" ]]; then
-                echo "Unauthorized or missing governance-remediation path: ${changed_paths[$i]}" >&2
+                echo "Unauthorized or missing governance-status-remediation path: ${changed_paths[$i]}" >&2
                 exit 1
               fi
             done
+          fi
+
+          if [[ "${HEAD_BRANCH:-}" == "chore/rp03-production-foundation-governance" ]]; then
+            authorized_paths=(
+              ".github/workflows/governance.yml"
+              ".gitignore"
+              "AGENTS.md"
+              "CONTRIBUTING.md"
+              "README.md"
+            )
+
+            mapfile -t changed_paths < <(git diff --name-only "$BASE_SHA"...HEAD | sort)
+
+            if [[ "${#changed_paths[@]}" -ne "${#authorized_paths[@]}" ]]; then
+              echo "RP03-GOV-REMEDIATION-003 must change exactly the five authorized paths." >&2
+              printf 'Changed path: %s\n' "${changed_paths[@]}" >&2
+              exit 1
+            fi
+
+            for i in "${!authorized_paths[@]}"; do
+              if [[ "${changed_paths[$i]}" != "${authorized_paths[$i]}" ]]; then
+                echo "Unauthorized or missing RP03-GOV-REMEDIATION-003 path: ${changed_paths[$i]:-<missing>}" >&2
+                exit 1
+              fi
+            done
+
+            if git diff --name-only "$BASE_SHA"...HEAD | grep -Eiq '(^|/)(migrations?|database|schema)(/|$)|\.php$|\.sql$|(^|/)(composer\.json|composer\.lock|package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$|(^|/)(adr|adrs)(/|$)|\.db(-wal|-shm)?$|\.sqlite(3)?(-wal|-shm)?$'; then
+              echo "RP03-GOV-REMEDIATION-003 contains a prohibited implementation/runtime artifact." >&2
+              exit 1
+            fi
           fi
 
       - name: Confirm stack-independent validation
         shell: bash
         run: |
           set -euo pipefail
-          echo "Governance validation completed without package installation, framework tooling, or product dependencies."
+          echo "Governance validation completed without PHP tooling, database tooling, package installation, framework tooling, or product dependencies."

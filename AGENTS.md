@@ -1,6 +1,6 @@
 # RP03 Repository Execution Contract
 
-This file is the repository-native execution contract for **RP03 — Booking & Services**. It governs bounded executors working in this repository. It does not authorize product implementation, architecture selection, merging, release, deployment, or gate transition.
+This file is the repository-native execution contract for **RP03 — Booking & Services**. It governs bounded executors working in this repository. It records Controller-approved repository-stable technical truth, but it does not authorize product implementation, architecture changes, merging, release, deployment, or gate transition.
 
 ## 1. Authority precedence
 
@@ -61,9 +61,11 @@ A pull request is an evidence and review boundary, not proof of acceptance.
 
 ## 5. Security, privacy, and operational safety
 
-Never commit a secret, credential, token, password, private key, signing key, production connection string, or equivalent sensitive material.
+Never commit a secret, credential, token, password, private key, signing key, production connection string, production configuration, or equivalent sensitive material.
 
-Use synthetic data only unless a later bounded contract expressly authorizes another controlled dataset. Default tests must not use real customer, guest, provider, staff, booking, payment, or communication data.
+Use synthetic data only unless a later bounded contract expressly authorizes another controlled dataset. Production data is prohibited in normal development/testing. Default tests must not use real customer, guest, provider, staff, booking, payment, identity, notification, remote-session, or communication data.
+
+Production database files, SQLite WAL/SHM sidecars, database backups, secrets, and production configuration must never be committed.
 
 The following actions are prohibited without an independent, explicit contract:
 
@@ -76,15 +78,61 @@ The following actions are prohibited without an independent, explicit contract:
 - changes to guest identity, guest ownership, booking ownership, or access-control rules; and
 - security-sensitive data model changes.
 
-Any authorized change involving authentication, authorization, guest ownership, payment, sensitive data, or external providers requires explicit scope, threat-aware validation, and security evidence in the pull request.
+Any authorized change involving authentication, authorization, identity, guest ownership, payment, sensitive data, or external providers requires explicit scope, threat-aware validation, and security evidence in the pull request.
 
-## 6. Implementation prohibitions for governance-only work
+## 6. Controller-approved production-foundation truth
 
-A governance workstream does not authorize application code, framework scaffolding, package manifests, lockfiles, database definitions, migrations, API routes, UI components, booking logic, authentication code, payment code, notification providers, remote-session integrations, containers, deployment configuration, architecture decisions, ADRs, design systems, release structures, copied Drive state, screenshots, or large logs.
+The approved minimum production foundation is:
 
-Do not infer a framework, database, API style, UI technology, deployment platform, or architecture from generic governance files.
+- preserved existing frontend: semantic HTML + plain CSS + browser-native JavaScript;
+- production server boundary: a supported PHP 8.x release at implementation time;
+- persistence: SQLite 3;
+- database access: `PDO_SQLITE` with parameterized SQL and no ORM;
+- server interaction: same-origin HTTP/JSON only where authoritative server behavior is required.
 
-## 7. Evidence and Execution Handoff
+Repository shorthand for the approved foundation is:
+
+`PHP 8.x + SQLite 3 + PDO_SQLITE`
+
+No framework or ORM is approved by default.
+
+`SINGLE_HOST_LOCAL_DURABLE_STORAGE` is a hard architecture condition. The SQLite database must remain on durable local storage on one application host. PostgreSQL must be re-evaluated before release if later approved requirements introduce multiple application hosts, ephemeral/serverless local storage, network-hosted SQLite, sustained write contention, database HA requirements, or mandatory database-native temporal exclusion.
+
+This section records Controller-approved architecture truth only. It does not authorize PHP implementation, database creation, schema work, migrations, routes, dependencies, deployment, production data, production credentials, or any unresolved product decision.
+
+## 7. Database and migration governance
+
+Database/schema/migration work requires an explicitly authorized workstream.
+
+For any later authorized migration work:
+
+- migrations must be numbered and immutable after acceptance;
+- migrations must never run automatically from normal HTTP requests;
+- destructive migrations require separate explicit authority;
+- migration execution, rollback behavior, supported starting schema, and recovery expectations must be defined by the authorizing workstream;
+- production database files, SQLite WAL/SHM files, database backups, and production data remain prohibited from Git.
+
+No governance text is permission to create a schema, migration, SQL DDL, runtime database, seed containing production data, or database backup.
+
+## 8. Authorization, booking authority, and concurrency governance
+
+Authentication/authorization/identity-sensitive changes require explicit scope and security evidence.
+
+Server-side authorization is authoritative; client route guards remain UX only.
+
+Booking/schedule authority changes require transaction and concurrency evidence. For later authorized schedule-affecting server mutations, evidence must show that authoritative availability/conflict checks and writes are protected by the approved transaction strategy rather than trusting browser-selected availability.
+
+Changes that affect booking ownership, protected operations, administrator authority, provider/resource assignment, exceptions/overrides, or identity/session behavior must remain inside explicitly authorized scope and must include negative authorization evidence where applicable.
+
+## 9. Implementation prohibitions for governance-only work
+
+A governance workstream does not authorize application code, framework scaffolding, package manifests, lockfiles, database definitions, migrations, API routes, UI components, booking logic, authentication code, payment code, notification providers, remote-session integrations, containers, deployment configuration, ADRs, design systems, release structures, copied Drive state, screenshots, or large logs.
+
+A governance workstream may record an already Controller-approved architecture only when its bounded contract explicitly authorizes that repository-governance update. It must not invent, broaden, or implement architecture.
+
+Do not infer a framework, ORM, alternative database, external identity provider, payment provider, notification provider, remote-session provider, deployment platform, or settled product policy from generic governance text.
+
+## 10. Evidence and Execution Handoff
 
 Every executor must publish a lightweight, reference-oriented `Execution Handoff` containing:
 
@@ -102,7 +150,7 @@ The handoff must classify evidence as references when GitHub or GitHub Actions a
 
 Evidence must be sufficient for a reviewer to reproduce the executor's claims without relying on conversation memory.
 
-## 8. Authority separation
+## 11. Authority separation
 
 - **Executor:** implements only the bounded contract, validates the result, publishes evidence, and stops at the stated gate.
 - **RP03 Central Controller:** reviews the diff and evidence and issues the Primary Verdict, including any authorized gate decision.
@@ -110,7 +158,7 @@ Evidence must be sufficient for a reviewer to reproduce the executor's claims wi
 
 The executor does not update Google Drive governed state, announce a gate transition, declare acceptance, authorize release, or represent work as production-ready.
 
-## 9. Required stop behavior
+## 12. Required stop behavior
 
 Stop immediately when the contract's Stop Gate is reached, when the verified baseline has changed unexpectedly, when authority conflicts, when required permissions are missing, or when the task would require an out-of-scope change.
 
