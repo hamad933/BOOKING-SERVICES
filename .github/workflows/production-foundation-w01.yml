@@ -1,0 +1,82 @@
+name: Production Foundation W01
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-foundation:
+    name: Validate PHP and SQLite foundation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify PHP and PDO_SQLITE
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -v
+          php -r 'if (PHP_VERSION_ID < 80000) { fwrite(STDERR, "PHP 8.x is required.\n"); exit(1); }'
+          php -r 'if (!extension_loaded("pdo_sqlite")) { fwrite(STDERR, "PDO_SQLITE is required.\n"); exit(1); } echo "PDO_SQLITE available\n";'
+
+      - name: Validate PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find server database tests -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
+
+      - name: Migrate empty temporary SQLite database
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RP03_DB_PATH=$RUNNER_TEMP/rp03-w01.sqlite" >> "$GITHUB_ENV"
+          RP03_DB_PATH="$RUNNER_TEMP/rp03-w01.sqlite" php database/migrate.php
+          RP03_DB_PATH="$RUNNER_TEMP/rp03-w01.sqlite" php database/migrate.php
+          RP03_DB_PATH="$RUNNER_TEMP/rp03-w01.sqlite" php -r '
+            $pdo = new PDO("sqlite:" . getenv("RP03_DB_PATH"));
+            $count = (int) $pdo->query("SELECT COUNT(*) FROM schema_migrations")->fetchColumn();
+            if ($count !== 1) { fwrite(STDERR, "Expected exactly one migration-history row.\n"); exit(1); }
+          '
+
+      - name: Run explicit synthetic development seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          php database/seed.php
+          php -r '
+            $pdo = new PDO("sqlite:" . getenv("RP03_DB_PATH"));
+            $count = (int) $pdo->query("SELECT COUNT(*) FROM services")->fetchColumn();
+            if ($count !== 6) { fwrite(STDERR, "Expected six synthetic services.\n"); exit(1); }
+          '
+
+      - name: Run real SQLite integration validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/production-foundation.php
+
+      - name: Verify runtime database and secret hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '\.(db|sqlite|sqlite3)(-wal|-shm)?$' >/dev/null; then
+            echo "Tracked SQLite runtime database or sidecar detected." >&2
+            exit 1
+          fi
+          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '^\.env\.example$' >/dev/null; then
+            echo "Tracked environment file detected." >&2
+            exit 1
+          fi
+          if git grep -nEI -- 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|(^|[^A-Za-z])(api[_-]?key|secret|token|password)[[:space:]]*=[[:space:]]*[^[:space:]]+' -- server database tests; then
+            echo "Potential committed secret material detected in W01 paths." >&2
+            exit 1
+          fi
+          echo "Runtime database and secret hygiene checks passed."
