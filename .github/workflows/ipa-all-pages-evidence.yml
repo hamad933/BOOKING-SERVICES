@@ -165,7 +165,7 @@ jobs:
           material_states = {
               "RP03-S01": ["normal-discovery"],
               "RP03-S02": ["normal-populated", "filtered", "no-results"],
-              "RP03-S03": ["normal", "faq-expanded"],
+              "RP03-S03": ["normal-detail", "faq-expanded"],
               "RP03-S04": ["question-progression", "final-recommendation"],
               "RP03-S05": ["available-booking", "unavailable-stale", "confirmed-local-success"],
               "RP03-S06": ["agenda", "selected-session-preparation"],
@@ -822,7 +822,7 @@ jobs:
           required_material = {
               "RP03-S01": ["normal-discovery"],
               "RP03-S02": ["normal-populated","filtered","no-results"],
-              "RP03-S03": ["normal","faq-expanded"],
+              "RP03-S03": ["normal-detail","faq-expanded"],
               "RP03-S04": ["question-progression","final-recommendation"],
               "RP03-S05": ["available-booking","unavailable-stale","confirmed-local-success"],
               "RP03-S06": ["agenda","selected-session-preparation"],
