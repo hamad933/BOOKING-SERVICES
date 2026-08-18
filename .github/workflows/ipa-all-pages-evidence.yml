@@ -1,0 +1,904 @@
+name: RP03 IPA All Pages Evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: Generate exact-candidate all-page visual evidence
+    if: github.head_ref == 'chore/rp03-ipa-evidence-all-pages'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out exact evidence head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify frozen base and evidence-only scope
+        shell: bash
+        env:
+          FROZEN_CANDIDATE: 06d7e80af27232f416940d04dffe4a325b01e14d
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          HEAD_SHA="$(git rev-parse HEAD)"
+          test "$HEAD_SHA" = "${{ github.event.pull_request.head.sha }}"
+
+          if [[ "$PR_BASE_SHA" != "$FROZEN_CANDIDATE" ]]; then
+            echo "BASELINE_OR_AUTHORITY_CONFLICT: PR base is $PR_BASE_SHA, expected $FROZEN_CANDIDATE" >&2
+            exit 1
+          fi
+
+          git cat-file -e "${FROZEN_CANDIDATE}^{commit}"
+
+          mapfile -t changed_paths < <(git diff --name-only "$FROZEN_CANDIDATE"...HEAD)
+          if [[ "${#changed_paths[@]}" -ne 1 || "${changed_paths[0]:-}" != ".github/workflows/ipa-all-pages-evidence.yml" ]]; then
+            echo "APPLICATION-BYTE EQUIVALENCE FAIL: unauthorized changed path detected." >&2
+            printf 'Changed path: %s\n' "${changed_paths[@]}" >&2
+            exit 1
+          fi
+
+          git branch --force main "$FROZEN_CANDIDATE"
+
+          echo "::group::git status --short"
+          git status --short
+          echo "::endgroup::"
+
+          echo "::group::git diff --check"
+          git diff --check
+          echo "::endgroup::"
+
+          echo "::group::git diff --check main...HEAD"
+          git diff --check main...HEAD
+          echo "::endgroup::"
+
+          echo "::group::git diff --name-only main...HEAD"
+          git diff --name-only main...HEAD
+          echo "::endgroup::"
+
+          echo "::group::git log --oneline --decorate --max-count=10"
+          git log --oneline --decorate --max-count=10
+          echo "::endgroup::"
+
+      - name: Prepare browser evidence tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$CHROME" ]]; then
+            echo "A Chromium-compatible browser is required for RP03 evidence." >&2
+            exit 1
+          fi
+          echo "CHROME=$CHROME" >> "$GITHUB_ENV"
+          python3 -m pip install --disable-pip-version-check --quiet "playwright==1.55.0" "Pillow==11.3.0"
+
+      - name: Generate all-page screenshots and manifest
+        shell: bash
+        env:
+          FROZEN_CANDIDATE: 06d7e80af27232f416940d04dffe4a325b01e14d
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          EVIDENCE="$RUNNER_TEMP/rp03-ipa-evidence"
+          rm -rf "$EVIDENCE"
+          mkdir -p "$EVIDENCE/screenshots" "$EVIDENCE/contact-sheets"
+          : > "$EVIDENCE/browser-console.log"
+          : > "$EVIDENCE/responsive-results.txt"
+
+          {
+            echo "PROJECT_ID=RP03"
+            echo "WORKSTREAM_ID=RP03-IPA-EVIDENCE-001"
+            echo "FROZEN_APPLICATION_CANDIDATE=$FROZEN_CANDIDATE"
+            echo "EVIDENCE_WORKSTREAM_HEAD=$EVIDENCE_HEAD"
+            echo "APPLICATION_BYTES_CHANGED=NO"
+            echo
+            echo "git diff --name-only ${FROZEN_CANDIDATE}...HEAD"
+            git diff --name-only "$FROZEN_CANDIDATE"...HEAD
+            echo
+            echo "git status --short"
+            git status --short
+            echo
+            echo "git diff --check"
+            git diff --check
+            echo
+            echo "git diff --check main...HEAD"
+            git diff --check main...HEAD
+            echo
+            echo "git diff --name-only main...HEAD"
+            git diff --name-only main...HEAD
+            echo
+            echo "git log --oneline --decorate --max-count=10"
+            git log --oneline --decorate --max-count=10
+          } > "$EVIDENCE/application-byte-equivalence.txt"
+
+          python3 -m http.server 8765 --bind 127.0.0.1 >"$RUNNER_TEMP/rp03-ipa-http.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 1
+
+          EVIDENCE="$EVIDENCE" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import struct
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          from PIL import Image, ImageDraw, ImageFont, ImageOps
+          from playwright.sync_api import sync_playwright
+
+          BASE = "http://127.0.0.1:8765"
+          EVIDENCE = Path(os.environ["EVIDENCE"])
+          CHROME = os.environ["CHROME"]
+          FROZEN = os.environ["FROZEN_CANDIDATE"]
+          HEAD = os.environ["EVIDENCE_HEAD"]
+
+          routes = [
+              {"pageId": "RP03-S01", "folder": "S01", "route": "/", "role": None},
+              {"pageId": "RP03-S02", "folder": "S02", "route": "/services/", "role": None},
+              {"pageId": "RP03-S03", "folder": "S03", "route": "/services/technical-review/", "role": None},
+              {"pageId": "RP03-S04", "folder": "S04", "route": "/guided-choice/", "role": None},
+              {"pageId": "RP03-S05", "folder": "S05", "route": "/book/technical-review/", "role": None},
+              {"pageId": "RP03-S06", "folder": "S06", "route": "/provider/schedule/", "role": "CONSULTANT"},
+              {"pageId": "RP03-S07", "folder": "S07", "route": "/resources/schedule/", "role": "CONSULTANT"},
+              {"pageId": "RP03-S08", "folder": "S08", "route": "/operations/bookings/", "role": "FRONT_DESK"},
+              {"pageId": "RP03-S09", "folder": "S09", "route": "/operations/attendance/", "role": "FRONT_DESK"},
+              {"pageId": "RP03-S10", "folder": "S10", "route": "/admin/services/", "role": "ADMIN"},
+              {"pageId": "RP03-S11", "folder": "S11", "route": "/admin/providers-resources/", "role": "ADMIN"},
+              {"pageId": "RP03-S12", "folder": "S12", "route": "/admin/availability-exceptions/", "role": "ADMIN"},
+              {"pageId": "RP03-PAGE-LOGIN", "folder": "login", "route": "/login/", "role": None},
+              {"pageId": "RP03-PAGE-UNAUTHORIZED", "folder": "unauthorized", "route": "/unauthorized/", "role": None},
+          ]
+          route_by_id = {item["pageId"]: item for item in routes}
+          viewports = [1440, 768, 430, 390]
+
+          material_states = {
+              "RP03-S01": ["normal-discovery"],
+              "RP03-S02": ["normal-populated", "filtered", "no-results"],
+              "RP03-S03": ["normal-detail", "faq-expanded"],
+              "RP03-S04": ["question-progression", "final-recommendation"],
+              "RP03-S05": ["available-booking", "unavailable-stale", "confirmed-local-success"],
+              "RP03-S06": ["agenda", "selected-session-preparation"],
+              "RP03-S07": ["resource-timeline", "selected-resource-occupancy"],
+              "RP03-S08": ["booking-list", "selected-detail", "guest-proof-preparation"],
+              "RP03-S09": ["upcoming-late", "no-show-eligible-explicit-action", "completed-follow-up"],
+              "RP03-S10": ["normal-list-detail", "create-edit"],
+              "RP03-S11": ["provider-tab", "resource-tab", "edit-detail"],
+              "RP03-S12": ["availability-rules", "exceptions", "overlap-impact-warning"],
+              "RP03-PAGE-LOGIN": ["default", "invalid-error", "demo-role-entry"],
+              "RP03-PAGE-UNAUTHORIZED": ["normal-denied"],
+          }
+
+          display_names = {
+              "AUTHENTICATED_CUSTOMER": "عميل تجريبي",
+              "CONSULTANT": "المستشار أحمد س.",
+              "FRONT_DESK": "موظف الاستقبال التجريبي",
+              "ADMIN": "مسؤول النظام التجريبي",
+          }
+
+          captures = []
+          defects = []
+          console_lines = []
+          auth_probes = {}
+
+          def png_dimensions(path):
+              raw = Path(path).read_bytes()
+              if raw[:8] != b"\x89PNG\r\n\x1a\n":
+                  raise RuntimeError(f"Not a PNG: {path}")
+              return struct.unpack(">II", raw[16:24])
+
+          def sha256_file(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          def role_init_script(role):
+              payload = ""
+              if role:
+                  role_js = json.dumps(role, ensure_ascii=False)
+                  display_js = json.dumps(display_names[role], ensure_ascii=False)
+                  payload = (
+                      "sessionStorage.setItem('rp03.auth.session.v1', JSON.stringify({"
+                      f"role:{role_js},displayName:{display_js},"
+                      "source:'rp03-hardening-evidence-harness',createdAt:new Date().toISOString()"
+                      "}));"
+                  )
+              return f"""
+              (() => {{
+                try {{
+                  sessionStorage.clear();
+                  {payload}
+                }} catch (_) {{}}
+              }})();
+              """
+
+          def attach_logging(page, label, local_console, local_runtime, local_network):
+              def on_console(message):
+                  text = message.text
+                  console_lines.append(f"[{label}] console.{message.type}: {text}")
+                  if message.type == "error":
+                      local_console.append(text)
+              def on_page_error(error):
+                  text = str(error)
+                  console_lines.append(f"[{label}] pageerror: {text}")
+                  local_runtime.append(text)
+              def on_request_failed(request):
+                  failure = request.failure
+                  text = f"{request.method} {request.url} :: {failure}"
+                  console_lines.append(f"[{label}] requestfailed: {text}")
+                  local_network.append(text)
+              page.on("console", on_console)
+              page.on("pageerror", on_page_error)
+              page.on("requestfailed", on_request_failed)
+
+          def load_page(browser, route_info, width, role_override=None):
+              role = role_override if role_override is not None else route_info["role"]
+              context = browser.new_context(
+                  viewport={"width": width, "height": 900},
+                  locale="ar-YE",
+                  timezone_id="Asia/Aden",
+                  device_scale_factor=1,
+              )
+              context.add_init_script(role_init_script(role))
+              page = context.new_page()
+              local_console, local_runtime, local_network = [], [], []
+              return context, page, role, local_console, local_runtime, local_network
+
+          def settle(page):
+              page.wait_for_load_state("load")
+              page.wait_for_timeout(850)
+
+          def setup_state(page_id, state, page):
+              achieved = True
+              notes = []
+
+              def visible(selector):
+                  return page.locator(selector).is_visible()
+
+              if page_id == "RP03-S02":
+                  if state == "filtered":
+                      page.select_option("#filter-category", "review")
+                      page.wait_for_timeout(150)
+                      achieved = page.locator("#active-filter-bar").is_visible()
+                  elif state == "no-results":
+                      page.fill("#service-search-input", "zzzz-rp03-evidence-no-results")
+                      page.wait_for_timeout(150)
+                      achieved = page.locator("#catalog-empty").is_visible()
+
+              elif page_id == "RP03-S03" and state == "faq-expanded":
+                  details = page.locator(".faq-section details").first
+                  details.evaluate("(el) => { el.open = true; }")
+                  achieved = details.get_attribute("open") is not None
+
+              elif page_id == "RP03-S04":
+                  if state == "question-progression":
+                      page.check('input[name="needType"][value="review"]')
+                      page.click("#continue-button")
+                      page.check('input[name="currentStage"][value="existing_implementation"]')
+                      page.wait_for_timeout(100)
+                      achieved = "السؤال 2" in page.locator("#question-step").inner_text()
+                  elif state == "final-recommendation":
+                      sequence = [
+                          ("needType", "review"),
+                          ("currentStage", "existing_implementation"),
+                          ("desiredOutcome", "evaluate"),
+                          ("discussionScope", "existing_solution"),
+                      ]
+                      for name, value in sequence:
+                          page.check(f'input[name="{name}"][value="{value}"]')
+                          page.click("#continue-button")
+                          page.wait_for_timeout(80)
+                      achieved = page.locator("#recommendation-view").is_visible()
+                      notes.append(f"recommendation={page.locator('#recommendation-title').inner_text().strip()}")
+
+              elif page_id == "RP03-S05":
+                  if state == "available-booking":
+                      achieved = (
+                          page.locator('.date-option[aria-pressed="true"]').count() == 1
+                          and page.locator('.time-option[aria-pressed="true"]').count() == 1
+                          and not page.locator("#stale-warning").is_visible()
+                      )
+                  elif state == "unavailable-stale":
+                      stale = page.locator("button.time-option[data-stale-candidate='true']:not([disabled])").first
+                      if stale.count() == 0:
+                          achieved = False
+                          notes.append("no stale-candidate slot found")
+                      else:
+                          stale.click()
+                          page.fill("#full-name", "ضيف تجريبي للأدلة")
+                          page.fill("#contact-value", "ipa.evidence@example.test")
+                          page.click("#confirm-booking")
+                          page.wait_for_timeout(200)
+                          achieved = page.locator("#stale-warning").is_visible()
+                  elif state == "confirmed-local-success":
+                      page.fill("#full-name", "ضيف تجريبي للأدلة")
+                      page.fill("#contact-value", "ipa.evidence@example.test")
+                      page.click("#confirm-booking")
+                      page.wait_for_timeout(200)
+                      achieved = page.locator("#confirmation-panel").is_visible()
+
+              elif page_id == "RP03-S06" and state == "selected-session-preparation":
+                  items = page.locator(".agenda-item")
+                  if items.count() < 2:
+                      achieved = False
+                  else:
+                      items.nth(min(2, items.count() - 1)).click()
+                      page.wait_for_timeout(120)
+                      achieved = page.locator("#session-panel").is_visible() and page.locator("#preparation-list li").count() > 0
+
+              elif page_id == "RP03-S07" and state == "selected-resource-occupancy":
+                  page.click("#detail-context-toggle")
+                  page.wait_for_timeout(100)
+                  achieved = page.locator("#detail-extra").is_visible()
+
+              elif page_id == "RP03-S08":
+                  if state == "selected-detail":
+                      rows = page.locator("#booking-table-body tr")
+                      if rows.count() < 2:
+                          achieved = False
+                      else:
+                          rows.nth(1).click()
+                          page.wait_for_timeout(100)
+                          achieved = page.locator("#booking-detail-title").inner_text().strip() != "اختر حجزًا من القائمة"
+                  elif state == "guest-proof-preparation":
+                      page.select_option("#detail-preparation-select", "FOLLOW_UP_REQUIRED")
+                      page.select_option("#detail-proof-select", "VERIFIED")
+                      page.wait_for_timeout(100)
+                      achieved = (
+                          page.locator("#detail-preparation-select").input_value() == "FOLLOW_UP_REQUIRED"
+                          and page.locator("#detail-proof-select").input_value() == "VERIFIED"
+                      )
+
+              elif page_id == "RP03-S09":
+                  if state == "upcoming-late":
+                      button = page.locator(".fd-session-button", has_text="عبدالله القحطاني").first
+                      if button.count() == 0:
+                          achieved = False
+                      else:
+                          button.click()
+                          page.wait_for_timeout(80)
+                          achieved = "متأخرة" in page.locator("#attendance-state").inner_text()
+                  elif state == "no-show-eligible-explicit-action":
+                      button = page.locator(".fd-session-button", has_text="إيمان الشهري").first
+                      if button.count() == 0:
+                          achieved = False
+                      else:
+                          button.click()
+                          page.wait_for_timeout(80)
+                          state_text = page.locator("#attendance-state").inner_text().strip()
+                          eligible = page.locator("#mark-no-show").is_enabled()
+                          achieved = eligible and "متأخرة" in state_text and "لم يحضر" not in state_text
+                          notes.append(f"state={state_text}; noShowActionEnabled={eligible}; automaticNoShow={('لم يحضر' in state_text)}")
+                  elif state == "completed-follow-up":
+                      button = page.locator(".fd-session-button", has_text="ماجد الزهراني").first
+                      if button.count() == 0:
+                          achieved = False
+                      else:
+                          button.click()
+                          page.check('input[name="follow-up"][value="yes"]')
+                          page.fill("#final-note", "متابعة تجريبية موثقة للأدلة فقط.")
+                          page.wait_for_timeout(80)
+                          achieved = (
+                              "مكتملة" in page.locator("#attendance-state").inner_text()
+                              and page.locator('input[name="follow-up"][value="yes"]').is_checked()
+                          )
+
+              elif page_id == "RP03-S10" and state == "create-edit":
+                  page.click("#service-add")
+                  page.wait_for_timeout(80)
+                  achieved = "إضافة خدمة محلية" in page.locator("#service-detail-title").inner_text()
+
+              elif page_id == "RP03-S11":
+                  if state == "resource-tab":
+                      page.click('[data-entity-tab="resources"]')
+                      page.wait_for_timeout(80)
+                      achieved = page.locator("#resources-panel").is_visible()
+                  elif state == "edit-detail":
+                      page.click('[data-entity-tab="providers"]')
+                      buttons = page.locator("[data-provider-id]")
+                      if buttons.count() < 2:
+                          achieved = False
+                      else:
+                          buttons.nth(1).click()
+                          page.wait_for_timeout(80)
+                          achieved = page.locator("#provider-form").locator("input:not([type='hidden'])").first.is_enabled()
+
+              elif page_id == "RP03-S12":
+                  if state == "exceptions":
+                      page.click("#exceptions-tab")
+                      buttons = page.locator("[data-exception-id]")
+                      if buttons.count():
+                          buttons.first.click()
+                      page.wait_for_timeout(80)
+                      achieved = page.locator("#exceptions-panel").is_visible()
+                  elif state == "overlap-impact-warning":
+                      page.click("#exception-add")
+                      page.fill("#exception-title", "تداخل تجريبي للأدلة")
+                      page.select_option("#exception-type", "MAINTENANCE")
+                      page.select_option("#exception-state", "PENDING_REVIEW")
+                      page.select_option("#exception-scope-type", "RESOURCE")
+                      page.fill("#exception-scope-label", "غرفة الاستشارة 2")
+                      page.fill("#exception-start-date", "2026-08-14")
+                      page.fill("#exception-end-date", "2026-08-14")
+                      page.fill("#exception-start-time", "11:00")
+                      page.fill("#exception-end-time", "12:00")
+                      page.wait_for_timeout(120)
+                      achieved = page.locator("#overlap-warning").is_visible() and page.locator("#impact-preview li").count() > 0
+
+              elif page_id == "RP03-PAGE-LOGIN":
+                  if state == "invalid-error":
+                      page.fill("#demo-username", "invalid-demo")
+                      page.fill("#demo-password", "invalid-demo")
+                      page.click("#demo-login-form button[type='submit']")
+                      page.wait_for_timeout(80)
+                      achieved = page.locator("#login-error").is_visible()
+                  elif state == "demo-role-entry":
+                      achieved = page.locator("#active-session").is_visible() and "مستشار" in page.locator("#active-session").inner_text()
+
+              return {"achieved": achieved, "notes": notes}
+
+          def inspect_page(page, expected_route, role, auth_probe):
+              data = page.evaluate("""
+              () => {
+                const root = document.documentElement;
+                const body = document.body;
+                const controls = Array.from(document.querySelectorAll('a,button,input,select,textarea,summary'))
+                  .filter((el) => {
+                    const style = getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+                  });
+                let sessionRole = null;
+                try {
+                  const raw = sessionStorage.getItem('rp03.auth.session.v1');
+                  sessionRole = raw ? JSON.parse(raw).role : null;
+                } catch (_) {}
+                return {
+                  clientWidth: root.clientWidth,
+                  scrollWidth: root.scrollWidth,
+                  scrollHeight: Math.max(root.scrollHeight, body ? body.scrollHeight : 0),
+                  htmlLang: root.getAttribute('lang') || '',
+                  htmlDir: root.getAttribute('dir') || '',
+                  computedDirection: getComputedStyle(body || root).direction,
+                  authPendingAfterLoad: body?.dataset?.authPending === 'true',
+                  visibleControls: controls.length,
+                  sessionRole,
+                };
+              }
+              """)
+              current_path = urlparse(page.url).path
+              return {
+                  **data,
+                  "routeLoaded": current_path == expected_route,
+                  "actualPath": current_path,
+                  "horizontalOverflow": data["scrollWidth"] > data["clientWidth"] + 1,
+                  "rtlIntegrity": data["htmlLang"].lower().startswith("ar") and data["htmlDir"].lower() == "rtl" and data["computedDirection"] == "rtl",
+                  "protectedRoleCorrect": (data["sessionRole"] == role) if role else (data["sessionRole"] is None),
+                  "authPendingProtectedContentLeak": (not auth_probe["pass"]) if auth_probe else None,
+                  "materialControlsInspectable": data["visibleControls"] > 0,
+              }
+
+          def capture(browser, route_info, state, width, setup=True, role_override=None):
+              context, page, role, local_console, local_runtime, local_network = load_page(browser, route_info, width, role_override)
+              label = f"{route_info['pageId']}::{state}::{width}"
+              attach_logging(page, label, local_console, local_runtime, local_network)
+              try:
+                  page.goto(BASE + route_info["route"], wait_until="load", timeout=30000)
+                  settle(page)
+                  setup_result = {"achieved": True, "notes": []}
+                  if setup:
+                      setup_result = setup_state(route_info["pageId"], state, page)
+                      page.wait_for_timeout(100)
+
+                  validation = inspect_page(page, route_info["route"], role, auth_probes.get(route_info["pageId"]))
+                  out_dir = EVIDENCE / "screenshots" / route_info["folder"]
+                  out_dir.mkdir(parents=True, exist_ok=True)
+                  out_path = out_dir / f"{state}-{width}.png"
+                  page.screenshot(path=str(out_path), full_page=True, animations="disabled", caret="hide")
+                  actual_width, actual_height = png_dimensions(out_path)
+                  validation["screenshotNotTruncated"] = actual_height + 2 >= validation["scrollHeight"]
+                  validation["actualWidthMatchesViewport"] = abs(actual_width - width) <= 1
+
+                  entry = {
+                      "pageId": route_info["pageId"],
+                      "route": route_info["route"],
+                      "role": role or "PUBLIC_UNAUTHENTICATED",
+                      "state": state,
+                      "viewportWidth": width,
+                      "viewportHeight": 900,
+                      "actualImageWidth": actual_width,
+                      "actualImageHeight": actual_height,
+                      "evidenceHead": HEAD,
+                      "frozenCandidateSha": FROZEN,
+                      "screenshotSha256": sha256_file(out_path),
+                      "applicationByteEquivalence": (
+                          f"FROZEN_APPLICATION_CANDIDATE={FROZEN}; "
+                          f"EVIDENCE_WORKSTREAM_HEAD={HEAD}; APPLICATION_BYTES_CHANGED=NO"
+                      ),
+                      "relativePath": str(out_path.relative_to(EVIDENCE)),
+                      "stateSetupAchieved": setup_result["achieved"],
+                      "stateNotes": setup_result["notes"],
+                      "validation": {
+                          **validation,
+                          "unhandledConsoleErrors": local_console,
+                          "unhandledRuntimeExceptions": local_runtime,
+                          "failedNetworkRequests": local_network,
+                      },
+                  }
+                  captures.append(entry)
+
+                  checks = {
+                      "routeLoaded": validation["routeLoaded"],
+                      "noHorizontalOverflow": not validation["horizontalOverflow"],
+                      "protectedRoleCorrect": validation["protectedRoleCorrect"],
+                      "authPendingResolved": not validation["authPendingAfterLoad"],
+                      "authPendingNoProtectedLeak": validation["authPendingProtectedContentLeak"] is not True,
+                      "noConsoleError": len(local_console) == 0,
+                      "noRuntimeException": len(local_runtime) == 0,
+                      "rtlIntegrity": validation["rtlIntegrity"],
+                      "materialControlsInspectable": validation["materialControlsInspectable"],
+                      "screenshotNotTruncated": validation["screenshotNotTruncated"],
+                      "stateSetupAchieved": setup_result["achieved"],
+                  }
+                  if not all(checks.values()):
+                      defects.append({
+                          "pageId": route_info["pageId"],
+                          "route": route_info["route"],
+                          "state": state,
+                          "viewportWidth": width,
+                          "failedChecks": [key for key, value in checks.items() if not value],
+                          "consoleErrors": local_console,
+                          "runtimeExceptions": local_runtime,
+                          "networkFailures": local_network,
+                          "stateNotes": setup_result["notes"],
+                      })
+
+                  print(
+                      f"{'PASS' if all(checks.values()) else 'OBSERVED'} "
+                      f"{route_info['pageId']} {route_info['route']} {state} {width}px "
+                      f"image={actual_width}x{actual_height}"
+                  )
+              except Exception as exc:
+                  defects.append({
+                      "pageId": route_info["pageId"],
+                      "route": route_info["route"],
+                      "state": state,
+                      "viewportWidth": width,
+                      "failedChecks": ["captureException"],
+                      "exception": repr(exc),
+                  })
+                  raise
+              finally:
+                  context.close()
+
+          def probe_pending_auth(browser, route_info):
+              context = browser.new_context(viewport={"width": 390, "height": 900}, locale="ar-YE", timezone_id="Asia/Aden")
+              page = context.new_page()
+              try:
+                  page.route("**/assets/js/auth.js", lambda route: route.abort())
+                  page.goto(BASE + route_info["route"], wait_until="domcontentloaded", timeout=30000)
+                  page.wait_for_timeout(250)
+                  result = page.evaluate("""
+                  () => {
+                    const body = document.body;
+                    const protectedNode = document.querySelector('[class*="protected"]');
+                    if (!body || !protectedNode) {
+                      return {pending: body?.dataset?.authPending === 'true', protectedNodeFound: false, visible: null};
+                    }
+                    const style = getComputedStyle(protectedNode);
+                    const rect = protectedNode.getBoundingClientRect();
+                    const visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+                      Number(style.opacity || '1') !== 0 && rect.width > 0 && rect.height > 0;
+                    return {
+                      pending: body.dataset.authPending === 'true',
+                      protectedNodeFound: true,
+                      visible,
+                      display: style.display,
+                      visibility: style.visibility,
+                      opacity: style.opacity,
+                    };
+                  }
+                  """)
+                  result["pass"] = bool(result.get("pending")) and bool(result.get("protectedNodeFound")) and not bool(result.get("visible"))
+                  return result
+              finally:
+                  context.close()
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(
+                  headless=True,
+                  executable_path=CHROME,
+                  args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+              )
+
+              for page_id in ["RP03-S06", "RP03-S07", "RP03-S08", "RP03-S09", "RP03-S10", "RP03-S11", "RP03-S12"]:
+                  auth_probes[page_id] = probe_pending_auth(browser, route_by_id[page_id])
+
+              for route_info in routes:
+                  for width in viewports:
+                      capture(browser, route_info, "normal", width, setup=False)
+
+              for page_id, states in material_states.items():
+                  route_info = route_by_id[page_id]
+                  for state in states:
+                      for width in [1440, 390]:
+                          override = "CONSULTANT" if page_id == "RP03-PAGE-LOGIN" and state == "demo-role-entry" else None
+                          capture(browser, route_info, state, width, setup=True, role_override=override)
+
+              browser.close()
+
+          def make_contact_sheet(name, page_ids):
+              source_paths = []
+              for page_id in page_ids:
+                  item = next(
+                      capture_item for capture_item in captures
+                      if capture_item["pageId"] == page_id and capture_item["state"] == "normal" and capture_item["viewportWidth"] == 1440
+                  )
+                  source_paths.append((page_id, EVIDENCE / item["relativePath"]))
+
+              card_w, card_h = 560, 360
+              cols = 2
+              rows = (len(source_paths) + cols - 1) // cols
+              canvas = Image.new("RGB", (card_w * cols, card_h * rows), "white")
+              draw = ImageDraw.Draw(canvas)
+              font = ImageFont.load_default()
+
+              for index, (label, path) in enumerate(source_paths):
+                  image = Image.open(path).convert("RGB")
+                  thumb = ImageOps.contain(image, (520, 310))
+                  x = (index % cols) * card_w + 20
+                  y = (index // cols) * card_h + 30
+                  canvas.paste(thumb, (x + (520 - thumb.width) // 2, y))
+                  draw.text((x, 8 + (index // cols) * card_h), f"{label} / normal / 1440", fill="black", font=font)
+
+              out = EVIDENCE / "contact-sheets" / name
+              canvas.save(out, format="PNG")
+              return {
+                  "name": name,
+                  "relativePath": str(out.relative_to(EVIDENCE)),
+                  "sha256": sha256_file(out),
+                  "width": canvas.width,
+                  "height": canvas.height,
+              }
+
+          contact_sheets = [
+              make_contact_sheet("01_PUBLIC.png", ["RP03-S01", "RP03-S02", "RP03-S03", "RP03-S04", "RP03-S05", "RP03-PAGE-LOGIN", "RP03-PAGE-UNAUTHORIZED"]),
+              make_contact_sheet("02_OPERATIONS.png", ["RP03-S06", "RP03-S07", "RP03-S08", "RP03-S09"]),
+              make_contact_sheet("03_ADMIN_SUPPORT.png", ["RP03-S10", "RP03-S11", "RP03-S12"]),
+          ]
+
+          normal_entries = [item for item in captures if item["state"] == "normal"]
+          material_entries = [item for item in captures if item["state"] != "normal"]
+          normal_problem_entries = [
+              item for item in normal_entries
+              if (
+                  item["validation"]["horizontalOverflow"]
+                  or not item["validation"]["routeLoaded"]
+                  or not item["validation"]["protectedRoleCorrect"]
+                  or item["validation"]["authPendingAfterLoad"]
+                  or item["validation"]["authPendingProtectedContentLeak"] is True
+                  or item["validation"]["unhandledConsoleErrors"]
+                  or item["validation"]["unhandledRuntimeExceptions"]
+                  or not item["validation"]["rtlIntegrity"]
+                  or not item["validation"]["materialControlsInspectable"]
+                  or not item["validation"]["screenshotNotTruncated"]
+              )
+          ]
+
+          console_error_count = sum(len(item["validation"]["unhandledConsoleErrors"]) for item in captures)
+          runtime_error_count = sum(len(item["validation"]["unhandledRuntimeExceptions"]) for item in captures)
+          role_failures = sum(
+              1 for item in captures
+              if route_by_id[item["pageId"]]["role"] and not item["validation"]["protectedRoleCorrect"]
+          )
+          auth_probe_failures = [page_id for page_id, probe in auth_probes.items() if not probe["pass"]]
+
+          manifest = {
+              "schemaVersion": 1,
+              "projectId": "RP03",
+              "workstreamId": "RP03-IPA-EVIDENCE-001",
+              "classification": {
+                  "FROZEN_APPLICATION_CANDIDATE": FROZEN,
+                  "EVIDENCE_WORKSTREAM_HEAD": HEAD,
+                  "APPLICATION_BYTES_CHANGED": "NO",
+                  "statement": "The evidence HEAD is an evidence-only workflow commit and is not a new application candidate.",
+              },
+              "historicalReferenceGaps": {
+                  "RP03-S04": "NOT_FOUND_AFTER_INSPECTION",
+              },
+              "normalViewportMatrix": [1440, 768, 430, 390],
+              "pagesCaptured": {
+                  "expected": 14,
+                  "actual": len(set(item["pageId"] for item in normal_entries)),
+              },
+              "normalCaptureCount": len(normal_entries),
+              "materialCaptureCount": len(material_entries),
+              "authPendingLeakProbes": auth_probes,
+              "summary": {
+                  "responsiveResult": "PASS" if not normal_problem_entries else f"OBSERVED_DEFECTS:{len(normal_problem_entries)}",
+                  "consoleResult": "PASS" if console_error_count == 0 else f"OBSERVED_ERRORS:{console_error_count}",
+                  "runtimeResult": "PASS" if runtime_error_count == 0 else f"OBSERVED_EXCEPTIONS:{runtime_error_count}",
+                  "authRoleResult": "PASS" if role_failures == 0 and not auth_probe_failures else f"OBSERVED_FAILURES:{role_failures + len(auth_probe_failures)}",
+                  "defectsObservedButNotFixed": len(defects),
+              },
+              "contactSheets": contact_sheets,
+              "screenshots": captures,
+              "defectsObservedButNotFixed": defects,
+          }
+          (EVIDENCE / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+          with (EVIDENCE / "responsive-results.txt").open("w", encoding="utf-8") as handle:
+              for item in captures:
+                  v = item["validation"]
+                  handle.write(
+                      f"{item['pageId']} route={item['route']} state={item['state']} viewport={item['viewportWidth']}x{item['viewportHeight']} "
+                      f"image={item['actualImageWidth']}x{item['actualImageHeight']} "
+                      f"routeLoaded={v['routeLoaded']} roleCorrect={v['protectedRoleCorrect']} "
+                      f"overflow={v['horizontalOverflow']} authPendingAfterLoad={v['authPendingAfterLoad']} "
+                      f"authPendingLeak={v['authPendingProtectedContentLeak']} consoleErrors={len(v['unhandledConsoleErrors'])} "
+                      f"runtimeExceptions={len(v['unhandledRuntimeExceptions'])} rtl={v['rtlIntegrity']} "
+                      f"controlsInspectable={v['materialControlsInspectable']} truncated={not v['screenshotNotTruncated']} "
+                      f"stateSetupAchieved={item['stateSetupAchieved']}\n"
+                  )
+
+          (EVIDENCE / "browser-console.log").write_text(
+              "\n".join(console_lines) + ("\n" if console_lines else ""),
+              encoding="utf-8",
+          )
+
+          with (EVIDENCE / "material-states.txt").open("w", encoding="utf-8") as handle:
+              for page_id, states in material_states.items():
+                  handle.write(f"{page_id}: {', '.join(states)}\n")
+
+          with (EVIDENCE / "observed-defects.json").open("w", encoding="utf-8") as handle:
+              json.dump(defects, handle, ensure_ascii=False, indent=2)
+
+          print("EVIDENCE SUMMARY")
+          print(f"PAGES_CAPTURED={manifest['pagesCaptured']['actual']}/14")
+          print(f"NORMAL_CAPTURE_COUNT={len(normal_entries)}")
+          print(f"MATERIAL_CAPTURE_COUNT={len(material_entries)}")
+          print(f"RESPONSIVE_RESULT={manifest['summary']['responsiveResult']}")
+          print(f"CONSOLE_RESULT={manifest['summary']['consoleResult']}")
+          print(f"RUNTIME_RESULT={manifest['summary']['runtimeResult']}")
+          print(f"AUTH_ROLE_RESULT={manifest['summary']['authRoleResult']}")
+          print(f"DEFECTS_OBSERVED_BUT_NOT_FIXED={len(defects)}")
+          PY
+
+      - name: Verify complete evidence package
+        shell: bash
+        env:
+          FROZEN_CANDIDATE: 06d7e80af27232f416940d04dffe4a325b01e14d
+          EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/rp03-ipa-evidence"
+
+          python3 - "$EVIDENCE" "$FROZEN_CANDIDATE" "$EVIDENCE_HEAD" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          frozen = sys.argv[2]
+          head = sys.argv[3]
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+
+          if manifest["classification"]["FROZEN_APPLICATION_CANDIDATE"] != frozen:
+              raise SystemExit("Manifest frozen candidate mismatch.")
+          if manifest["classification"]["EVIDENCE_WORKSTREAM_HEAD"] != head:
+              raise SystemExit("Manifest evidence HEAD mismatch.")
+          if manifest["classification"]["APPLICATION_BYTES_CHANGED"] != "NO":
+              raise SystemExit("Application-byte equivalence classification is not NO.")
+
+          screenshots = manifest["screenshots"]
+          normal = [item for item in screenshots if item["state"] == "normal"]
+          if len(normal) != 56:
+              raise SystemExit(f"Expected 56 normal matrix captures; got {len(normal)}.")
+
+          expected_pages = {
+              "RP03-S01","RP03-S02","RP03-S03","RP03-S04","RP03-S05","RP03-S06","RP03-S07",
+              "RP03-S08","RP03-S09","RP03-S10","RP03-S11","RP03-S12","RP03-PAGE-LOGIN","RP03-PAGE-UNAUTHORIZED"
+          }
+          if {item["pageId"] for item in normal} != expected_pages:
+              raise SystemExit("Normal matrix does not cover all 14 page IDs.")
+
+          for page_id in expected_pages:
+              widths = {item["viewportWidth"] for item in normal if item["pageId"] == page_id}
+              if widths != {1440, 768, 430, 390}:
+                  raise SystemExit(f"Viewport matrix incomplete for {page_id}: {sorted(widths)}")
+
+          required_material = {
+              "RP03-S01": ["normal-discovery"],
+              "RP03-S02": ["normal-populated","filtered","no-results"],
+              "RP03-S03": ["normal-detail","faq-expanded"],
+              "RP03-S04": ["question-progression","final-recommendation"],
+              "RP03-S05": ["available-booking","unavailable-stale","confirmed-local-success"],
+              "RP03-S06": ["agenda","selected-session-preparation"],
+              "RP03-S07": ["resource-timeline","selected-resource-occupancy"],
+              "RP03-S08": ["booking-list","selected-detail","guest-proof-preparation"],
+              "RP03-S09": ["upcoming-late","no-show-eligible-explicit-action","completed-follow-up"],
+              "RP03-S10": ["normal-list-detail","create-edit"],
+              "RP03-S11": ["provider-tab","resource-tab","edit-detail"],
+              "RP03-S12": ["availability-rules","exceptions","overlap-impact-warning"],
+              "RP03-PAGE-LOGIN": ["default","invalid-error","demo-role-entry"],
+              "RP03-PAGE-UNAUTHORIZED": ["normal-denied"],
+          }
+
+          material = [item for item in screenshots if item["state"] != "normal"]
+          for page_id, states in required_material.items():
+              for state in states:
+                  widths = {item["viewportWidth"] for item in material if item["pageId"] == page_id and item["state"] == state}
+                  if widths != {1440, 390}:
+                      raise SystemExit(f"Material state incomplete: {page_id} {state}: {sorted(widths)}")
+                  for item in material:
+                      if item["pageId"] == page_id and item["state"] == state and not item["stateSetupAchieved"]:
+                          raise SystemExit(f"Material state setup not achieved: {page_id} {state} {item['viewportWidth']}")
+
+          for item in screenshots:
+              path = root / item["relativePath"]
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f"Missing screenshot file: {item['relativePath']}")
+              if item["frozenCandidateSha"] != frozen or item["evidenceHead"] != head:
+                  raise SystemExit(f"Screenshot manifest authority mismatch: {item['relativePath']}")
+              if "APPLICATION_BYTES_CHANGED=NO" not in item["applicationByteEquivalence"]:
+                  raise SystemExit(f"Missing byte-equivalence statement: {item['relativePath']}")
+
+          contact_sheets = manifest["contactSheets"]
+          if [item["name"] for item in contact_sheets] != ["01_PUBLIC.png","02_OPERATIONS.png","03_ADMIN_SUPPORT.png"]:
+              raise SystemExit("Contact sheet set is not exactly the authorized three.")
+          for item in contact_sheets:
+              if not (root / item["relativePath"]).is_file():
+                  raise SystemExit(f"Missing contact sheet: {item['relativePath']}")
+
+          required_root_files = [
+              "manifest.json",
+              "responsive-results.txt",
+              "browser-console.log",
+              "application-byte-equivalence.txt",
+              "material-states.txt",
+              "observed-defects.json",
+          ]
+          for name in required_root_files:
+              if not (root / name).is_file():
+                  raise SystemExit(f"Missing evidence root file: {name}")
+
+          if manifest["historicalReferenceGaps"].get("RP03-S04") != "NOT_FOUND_AFTER_INSPECTION":
+              raise SystemExit("S04 historical reference gap was not recorded exactly.")
+
+          print(f"PACKAGE_OK screenshots={len(screenshots)} normal={len(normal)} material={len(material)}")
+          print(f"PAGES_CAPTURED={manifest['pagesCaptured']['actual']}/14")
+          print(f"RESPONSIVE_RESULT={manifest['summary']['responsiveResult']}")
+          print(f"CONSOLE_RESULT={manifest['summary']['consoleResult']}")
+          print(f"RUNTIME_RESULT={manifest['summary']['runtimeResult']}")
+          print(f"AUTH_ROLE_RESULT={manifest['summary']['authRoleResult']}")
+          print(f"DEFECTS_OBSERVED_BUT_NOT_FIXED={manifest['summary']['defectsObservedButNotFixed']}")
+          PY
+
+          mapfile -t changed_paths < <(git diff --name-only "$FROZEN_CANDIDATE"...HEAD)
+          if [[ "${#changed_paths[@]}" -ne 1 || "${changed_paths[0]}" != ".github/workflows/ipa-all-pages-evidence.yml" ]]; then
+            echo "APPLICATION_BYTES_CHANGED cannot be classified NO." >&2
+            exit 1
+          fi
+
+          echo "APPLICATION_BYTES_CHANGED=NO"
+
+      - name: Upload exact-head evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp03-ipa-evidence-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/rp03-ipa-evidence
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 14
