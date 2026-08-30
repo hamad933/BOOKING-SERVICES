@@ -1,0 +1,76 @@
+# RP03 Automation Gateway — Foundation Contract
+
+Status: `W01 FOUNDATION — NO LIVE PROVIDER MUTATION`
+
+Project: `RP03 — Booking & Services`  
+Repository binding: `hamad933/BOOKING-SERVICES`
+
+## Purpose
+
+The RP03 Automation Gateway is a project-native control boundary for future Controller-driven automation. It is not a second project authority and it never replaces Google Drive governed state or GitHub technical truth.
+
+Foundation flow:
+
+```text
+Drive governed authority
+→ Central Controller
+→ strict RP03 request envelope
+→ trusted identity + request/effect digest
+→ idempotency decision
+→ mutation kill switch / reconciliation gate
+→ [future provider adapter]
+→ redacted machine receipt
+→ Controller review
+→ [future trusted publication]
+→ isolated GitHub candidate
+```
+
+There is intentionally **no provider transport implementation in W01**. No code in this foundation can create a Jules session, send a message, approve a plan, push a candidate, merge, release, or deploy.
+
+## Hard invariants
+
+1. `project_id`, route, and repository are server-trusted constants; callers cannot override them.
+2. Unknown top-level or action-specific fields fail closed.
+3. Mutation requests must bind `logical_task_id`, `write_domain`, exact branch, and exact expected Git SHA.
+4. New provider sessions require `require_plan_approval=true`; automatic PR creation is not in the allowed request schema.
+5. Request digests use deterministic canonical JSON and SHA-256.
+6. Provider-effect identity is distinct from request identity and includes project, repository, workstream, logical task, write domain, action, target, and exact expected SHA.
+7. Reusing an identity with a different request digest is a collision, not a retry.
+8. Active or unknown operation states require reconciliation before another provider write.
+9. `UNKNOWN_WRITE_OUTCOME` is never safe to blind retry. Only an authoritative `NOT_APPLIED` reconciliation may enter the explicit reconciled-retry state.
+10. Mutation is default-disabled and requires both an explicit request gate and the exact out-of-band kill-switch value. W01 still has no provider adapter even if both gates are satisfied.
+11. Obvious credential/token/private-key material is rejected before normalization; durable receipts redact prompts and provider session identifiers.
+12. Publication primitives reject traversal, reserved control-plane paths, environment files, symlink/gitlink modes, binary patches, and paths outside a governed allowlist.
+13. `PUSH != ACCEPTANCE != MERGE`. Release/deploy/production are separate gates.
+
+## Concurrency model
+
+Future execution uses separate identity/concurrency domains rather than a project-global lock:
+
+- request identity prevents the same request from being consumed inconsistently;
+- effect identity serializes a provider side effect;
+- `write_domain` serializes one logical writer domain;
+- independent disjoint write domains may run concurrently;
+- publication must use a separate target-branch compare-and-swap boundary.
+
+No concurrency primitive grants authority. Drive workstream authority and exact GitHub state still control execution.
+
+## Evidence model
+
+Durable receipts are machine-readable and include the request digest, workstream, action, outcome, effect key when applicable, observed time, whether provider mutation occurred, external-effect count, and `safe_to_blind_retry=false`. Prompts/session IDs and secret-like values are redacted.
+
+The foundation does not use evidence artifacts as the sole long-term replay barrier. A later mutation workstream must define a durable idempotency store/ledger with post-write reconciliation and must not make a retention-limited CI artifact the only source of replay safety.
+
+## Lifecycle after W01
+
+The next safe stages are intentionally separated:
+
+1. **W02 Shadow Read** — add GET-only Jules/source/session/activity inspection, pagination, budgets, sanitization, and read receipts. No provider mutation.
+2. **W03 Mutation + Reconciliation Canary** — only after W01/W02 acceptance; add write intent, final pre-read, exactly one provider write, post-read, unknown-outcome reconciliation, and effect/write-domain concurrency.
+3. **W04 Trusted Publication** — exact reviewed changeset/base SHA/path digest binding, isolated branch only, non-force push, remote SHA readback. No merge.
+4. **W05 Controller Integration** — connect governed Drive workstream identity and Controller dispatch to the project-native gateway.
+5. **Hourly control** — only after mutation, reconciliation, evidence, publication, and kill-switch gates are proven safe. The hourly cycle must continue useful safe work; it must not become a blind retry/status loop.
+
+## Secret provisioning boundary
+
+Repository secret inventory and secret values are not part of this repository contract. The future provider workstream may require the Owner to provision `JULES_API_KEY` through GitHub repository secret settings. The secret must never be committed, printed, copied into Drive, or persisted in receipts.
