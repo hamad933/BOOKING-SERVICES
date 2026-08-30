@@ -83,8 +83,8 @@ class ShadowReadTests(unittest.TestCase):
     def test_page_and_item_budgets_fail_closed(self):
         def page(method, url, headers, timeout, max_bytes):
             parsed = urlparse(url)
-            token = parse_qs(parsed.query).get("pageToken", [None])[0]
-            return 200, json.dumps({"sessions": [{"name": f"sessions/{token or 'A'}", "sourceContext": {"source": JULES_SOURCE}}], "nextPageToken": "B" if token is None else "C"}).encode()
+            cursor = parse_qs(parsed.query).get("pageToken", [None])[0]
+            return 200, json.dumps({"sessions": [{"name": f"sessions/{cursor or 'A'}", "sourceContext": {"source": JULES_SOURCE}}], "nextPageToken": "B" if cursor is None else "C"}).encode()
         with self.assertRaises(BudgetExceeded):
             ShadowReader("k", transport=FakeTransport({"/v1alpha/sessions": page}), budget=ReadBudget(max_pages=1)).inspect_sessions()
         many = {"sessions": [bound_session(str(i)) for i in range(3)]}
