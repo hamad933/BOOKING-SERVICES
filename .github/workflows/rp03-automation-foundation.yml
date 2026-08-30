@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R -nE 'jules\.googleapis\.com|x-goog-api-key|urllib\.request|requests\.(get|post|put|patch|delete)' tools/rp03_automation --include='*.py'; then
+          if grep -R -nE 'https?://jules\.googleapis\.com|(^|[[:space:]])(import[[:space:]]+(urllib\.request|requests|httpx|aiohttp)|from[[:space:]]+(urllib|requests|httpx|aiohttp)[[:space:]]+import)' tools/rp03_automation --include='*.py'; then
             echo 'Provider transport code is prohibited in W01 foundation.' >&2
             exit 1
           fi

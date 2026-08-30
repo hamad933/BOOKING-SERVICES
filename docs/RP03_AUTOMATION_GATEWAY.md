@@ -2,7 +2,7 @@
 
 Status: `W01 FOUNDATION — NO LIVE PROVIDER MUTATION`
 
-Project: `RP03 — Booking & Services`  
+Project: `RP03 — Booking & Services`
 Repository binding: `hamad933/BOOKING-SERVICES`
 
 ## Purpose
