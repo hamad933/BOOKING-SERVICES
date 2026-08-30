@@ -9,6 +9,10 @@ on:
       - '.github/workflows/rp03-automation-foundation.yml'
       - '.github/workflows/rp03-automation-shadow-read.yml'
       - 'docs/RP03_AUTOMATION_GATEWAY.md'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/rp03_automation/live_probe_request.json'
   workflow_dispatch:
     inputs:
       live_probe:
@@ -51,7 +55,16 @@ jobs:
             esac
           done
       - name: Validate Git whitespace
-        run: git diff --check "origin/${{ github.base_ref }}...HEAD" 2>/dev/null || git diff --check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "origin/${{ github.base_ref }}...HEAD"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            git diff --check "${{ github.event.before }}..HEAD"
+          else
+            git diff --check
+          fi
       - name: Compile automation modules
         run: python -m compileall -q tools/rp03_automation tests/rp03_automation
       - name: Run deterministic automation tests
@@ -76,21 +89,46 @@ jobs:
           PY
 
   live-shadow-read:
-    if: github.event_name == 'workflow_dispatch' && inputs.live_probe
+    if: (github.event_name == 'workflow_dispatch' && inputs.live_probe) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: validate-shadow-read
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
-    env:
-      JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Validate governed main-only probe request
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          EXPECTED_BEFORE: ${{ github.event.before }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          data = json.loads(Path('tools/rp03_automation/live_probe_request.json').read_text())
+          assert data == {
+              'schema_version': '1.0',
+              'request_id': data['request_id'],
+              'action': 'GET_ONLY_SHADOW_PROBE',
+              'repository': 'hamad933/BOOKING-SERVICES',
+              'expected_parent_sha': os.environ['EXPECTED_BEFORE'],
+              'provider_mutation_authorized': False,
+          }
+          assert re.fullmatch(r'RP03-AUTO-W02-LIVE-[A-Za-z0-9._:-]{1,96}', data['request_id'])
+          assert re.fullmatch(r'[0-9a-f]{40}', data['expected_parent_sha'])
+          print('MAIN_ONLY_PROBE_REQUEST_BINDING_PROVEN')
+          PY
       - name: Require provisioned Jules API key without printing it
         shell: bash
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${JULES_API_KEY:-}" ]; then
@@ -98,6 +136,8 @@ jobs:
             exit 3
           fi
       - name: Run bounded live GET-only RP03 probe
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: python -m tools.rp03_automation.shadow_read --probe > rp03-shadow-read-receipt.json
       - name: Validate receipt safety invariants
         shell: bash

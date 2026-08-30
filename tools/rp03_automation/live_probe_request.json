@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "request_id": "RP03-AUTO-W02-LIVE-20260830T1935Z",
+  "action": "GET_ONLY_SHADOW_PROBE",
+  "repository": "hamad933/BOOKING-SERVICES",
+  "expected_parent_sha": "18af07d7fbd3c41ae9c40b881f7deab11c2fe345",
+  "provider_mutation_authorized": false
+}
