@@ -135,28 +135,95 @@ jobs:
             echo 'JULES_API_KEY_NOT_CONFIGURED'
             exit 3
           fi
-      - name: Run bounded live GET-only RP03 probe
+      - name: Run bounded live GET-only RP03 probe and preserve sanitized outcome
+        id: provider_probe
+        continue-on-error: true
         env:
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
-        run: python -m tools.rp03_automation.shadow_read --probe > rp03-shadow-read-receipt.json
-      - name: Validate receipt safety invariants
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from tools.rp03_automation.shadow_read import ProviderHTTPError, ShadowReadError, ShadowReader
+
+          reader = ShadowReader(os.environ['JULES_API_KEY'])
+          try:
+              receipt = reader.probe()
+              code = 0
+          except ShadowReadError as exc:
+              receipt = {
+                  'schema_version': '1.0',
+                  'project_id': 'RP03',
+                  'route': 'RP03',
+                  'repository': 'hamad933/BOOKING-SERVICES',
+                  'observed_at': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                  'status': type(exc).__name__,
+                  'provider_http_status': exc.status if isinstance(exc, ProviderHTTPError) else None,
+                  'provider_read_complete': False,
+                  'source_binding': 'UNPROVEN',
+                  'requests_performed': reader.request_count,
+                  'bytes_read': reader.bytes_read,
+                  'provider_mutation_performed': False,
+                  'external_effects_dispatched': 0,
+                  'new_tasks_or_sessions_created': 0,
+                  'safe_to_blind_retry': False,
+              }
+              code = 2
+          Path('rp03-shadow-read-receipt.json').write_text(
+              json.dumps(receipt, sort_keys=True, separators=(',', ':')),
+              encoding='utf-8',
+          )
+          raise SystemExit(code)
+          PY
+      - name: Validate sanitized receipt envelope
+        id: receipt_guard
+        if: always() && hashFiles('rp03-shadow-read-receipt.json') != ''
         shell: bash
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          data=json.loads(Path('rp03-shadow-read-receipt.json').read_text())
-          assert data['provider_read_complete'] is True
-          assert data['source_binding'] == 'SOURCE_BINDING_PROVEN'
+
+          data = json.loads(Path('rp03-shadow-read-receipt.json').read_text())
+          assert data['schema_version'] == '1.0'
+          assert data['project_id'] == 'RP03'
+          assert data['route'] == 'RP03'
+          assert data['repository'] == 'hamad933/BOOKING-SERVICES'
           assert data['provider_mutation_performed'] is False
           assert data['external_effects_dispatched'] == 0
           assert data['new_tasks_or_sessions_created'] == 0
           assert data['safe_to_blind_retry'] is False
-          print('LIVE_SHADOW_READ_RECEIPT_VALID')
+          if data['provider_read_complete'] is True:
+              assert data['source_binding'] == 'SOURCE_BINDING_PROVEN'
+          else:
+              assert data['source_binding'] == 'UNPROVEN'
+              assert data['status'] in {
+                  'ProviderHTTPError', 'BudgetExceeded', 'PaginationError',
+                  'SourceBindingError', 'UnsafeProviderRequest', 'ShadowReadError'
+              }
+              value = data.get('provider_http_status')
+              assert value is None or (isinstance(value, int) and 400 <= value <= 599)
+          encoded = json.dumps(data, sort_keys=True)
+          for forbidden in ('x-goog-api-key', 'authorization', 'prompt', 'session_id', 'raw_session_id'):
+              assert forbidden not in encoded.casefold()
+          print('SANITIZED_SHADOW_READ_RECEIPT_VALID')
           PY
-      - uses: actions/upload-artifact@v4
+      - name: Upload sanitized Shadow Read receipt
+        if: always() && steps.receipt_guard.outcome == 'success'
+        uses: actions/upload-artifact@v4
         with:
           name: rp03-shadow-read-${{ github.sha }}
           path: rp03-shadow-read-receipt.json
           if-no-files-found: error
           retention-days: 30
+      - name: Propagate live probe failure after evidence persistence
+        if: always() && steps.provider_probe.outcome == 'failure'
+        shell: bash
+        run: |
+          echo 'LIVE_GET_FAILED_RECEIPT_PRESERVED'
+          exit 2
