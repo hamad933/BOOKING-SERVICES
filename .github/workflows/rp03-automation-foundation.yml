@@ -25,12 +25,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Enforce bounded changed paths on pull requests
+      - name: Enforce bounded automation paths on pull requests
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -41,22 +39,19 @@ jobs:
           test "${#changed[@]}" -gt 0
           for path in "${changed[@]}"; do
             case "$path" in
-              tools/rp03_automation/*|tests/rp03_automation/*|.github/workflows/rp03-automation-foundation.yml|docs/RP03_AUTOMATION_GATEWAY.md) ;;
+              tools/rp03_automation/*|tests/rp03_automation/*|.github/workflows/rp03-automation-foundation.yml|.github/workflows/rp03-automation-shadow-read.yml|docs/RP03_AUTOMATION_GATEWAY.md) ;;
               *) echo "OUT_OF_SCOPE_PATH=$path" >&2; exit 1 ;;
             esac
           done
-
       - name: Compile foundation
         run: python -m compileall -q tools/rp03_automation tests/rp03_automation
-
       - name: Run deterministic unit tests
         run: python -m unittest discover -s tests/rp03_automation -v
-
-      - name: Prove foundation contains no provider transport
+      - name: Prove the W01 foundation module itself contains no provider transport
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R -nE 'https?://jules\.googleapis\.com|(^|[[:space:]])(import[[:space:]]+(urllib\.request|requests|httpx|aiohttp)|from[[:space:]]+(urllib|requests|httpx|aiohttp)[[:space:]]+import)' tools/rp03_automation --include='*.py'; then
-            echo 'Provider transport code is prohibited in W01 foundation.' >&2
+          if grep -nE 'https?://jules\.googleapis\.com|(^|[[:space:]])(import[[:space:]]+(urllib\.request|requests|httpx|aiohttp)|from[[:space:]]+(urllib|requests|httpx|aiohttp)[[:space:]]+import)' tools/rp03_automation/foundation.py; then
+            echo 'Provider transport remains prohibited inside the W01 foundation module.' >&2
             exit 1
           fi

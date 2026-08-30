@@ -1,0 +1,122 @@
+name: RP03 Automation Shadow Read
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/rp03_automation/**'
+      - 'tests/rp03_automation/**'
+      - '.github/workflows/rp03-automation-foundation.yml'
+      - '.github/workflows/rp03-automation-shadow-read.yml'
+      - 'docs/RP03_AUTOMATION_GATEWAY.md'
+  workflow_dispatch:
+    inputs:
+      live_probe:
+        description: 'Run bounded live GET-only Jules probe'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rp03-automation-shadow-read-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-shadow-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Enforce bounded W02 paths on pull requests
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          mapfile -t changed < <(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          printf '%s\n' "${changed[@]}"
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              tools/rp03_automation/*|tests/rp03_automation/*|.github/workflows/rp03-automation-foundation.yml|.github/workflows/rp03-automation-shadow-read.yml|docs/RP03_AUTOMATION_GATEWAY.md) ;;
+              *) echo "OUT_OF_SCOPE_PATH=$path" >&2; exit 1 ;;
+            esac
+          done
+      - name: Validate Git whitespace
+        run: git diff --check "origin/${{ github.base_ref }}...HEAD" 2>/dev/null || git diff --check
+      - name: Compile automation modules
+        run: python -m compileall -q tools/rp03_automation tests/rp03_automation
+      - name: Run deterministic automation tests
+        run: python -m unittest discover -s tests/rp03_automation -v
+      - name: Prove Shadow Read has no provider mutation request construction
+        shell: bash
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          tree = ast.parse(Path('tools/rp03_automation/shadow_read.py').read_text())
+          bad = []
+          for node in ast.walk(tree):
+              if not isinstance(node, ast.Call):
+                  continue
+              for kw in node.keywords:
+                  if kw.arg == 'method' and isinstance(kw.value, ast.Constant) and kw.value.value in {'POST','PUT','PATCH','DELETE'}:
+                      bad.append((node.lineno, kw.value.value))
+          if bad:
+              raise SystemExit(f'Provider mutation request construction found: {bad}')
+          print('GET_ONLY_REQUEST_CONSTRUCTION_PROVEN')
+          PY
+
+  live-shadow-read:
+    if: github.event_name == 'workflow_dispatch' && inputs.live_probe
+    needs: validate-shadow-read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require provisioned Jules API key without printing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${JULES_API_KEY:-}" ]; then
+            echo 'JULES_API_KEY_NOT_CONFIGURED'
+            exit 3
+          fi
+      - name: Run bounded live GET-only RP03 probe
+        run: python -m tools.rp03_automation.shadow_read --probe > rp03-shadow-read-receipt.json
+      - name: Validate receipt safety invariants
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('rp03-shadow-read-receipt.json').read_text())
+          assert data['provider_read_complete'] is True
+          assert data['source_binding'] == 'SOURCE_BINDING_PROVEN'
+          assert data['provider_mutation_performed'] is False
+          assert data['external_effects_dispatched'] == 0
+          assert data['new_tasks_or_sessions_created'] == 0
+          assert data['safe_to_blind_retry'] is False
+          print('LIVE_SHADOW_READ_RECEIPT_VALID')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rp03-shadow-read-${{ github.sha }}
+          path: rp03-shadow-read-receipt.json
+          if-no-files-found: error
+          retention-days: 30
